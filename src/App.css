@@ -1,11 +1,11 @@
 .app-shell {
   height: 100vh;
   display: grid;
-  grid-template-columns: 216px 1fr auto;
+  grid-template-columns: 216px 1fr;
   grid-template-rows: 52px 1fr;
   grid-template-areas:
-    "topbar topbar topbar"
-    "sidebar stage log";
+    "topbar topbar"
+    "sidebar stage";
 }
 
 .app-stage-wrap {
