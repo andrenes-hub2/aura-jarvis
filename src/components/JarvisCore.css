@@ -1,0 +1,155 @@
+.jarvis-stage {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  background: radial-gradient(ellipse at center, #0a1120 0%, #05070c 68%);
+}
+
+.jarvis-canvas {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.jarvis-core-node {
+  position: absolute;
+  width: 128px;
+  height: 128px;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.jarvis-core-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: radial-gradient(circle, color-mix(in srgb, var(--core-cyan) 55%, transparent) 0%, transparent 70%);
+  filter: blur(6px);
+  animation: core-breathe 4.5s ease-in-out infinite;
+}
+
+.jarvis-core-ring {
+  position: absolute;
+  inset: 18px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 32% 28%, #d6fff3, var(--core-cyan) 40%, var(--core-violet) 100%);
+  box-shadow:
+    0 0 30px color-mix(in srgb, var(--core-cyan) 55%, transparent),
+    inset 0 0 24px rgba(0, 0, 0, 0.25);
+}
+
+.jarvis-core-label {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+}
+
+.jarvis-core-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  color: #051510;
+}
+
+.jarvis-core-subtitle {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: rgba(5, 21, 16, 0.65);
+  text-transform: uppercase;
+}
+
+@keyframes core-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 0.9;
+    transform: scale(1.06);
+  }
+}
+
+.jarvis-agent-node {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 92px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--text-muted);
+}
+
+.jarvis-agent-node[data-label-side="top"] {
+  flex-direction: column-reverse;
+}
+
+.jarvis-agent-ring {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--panel-solid);
+  border: 2px solid var(--role-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-color) 30%, transparent);
+  position: relative;
+  flex-shrink: 0;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.jarvis-agent-ring::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--status-color);
+  box-shadow: 0 0 6px var(--status-color);
+}
+
+.jarvis-agent-ring[data-status="active"] {
+  animation: agent-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes agent-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--status-color) 30%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 7px color-mix(in srgb, var(--status-color) 16%, transparent);
+  }
+}
+
+.jarvis-agent-node:hover .jarvis-agent-ring {
+  transform: scale(1.08);
+}
+
+.jarvis-agent-name {
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+  white-space: nowrap;
+}
+
+.jarvis-agent-role {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}

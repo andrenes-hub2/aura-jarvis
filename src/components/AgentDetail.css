@@ -1,0 +1,91 @@
+.agent-detail {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 220px;
+  padding: 16px;
+  background: var(--panel);
+  backdrop-filter: blur(16px);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4);
+}
+
+.agent-detail-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  background: none;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.agent-detail-close:hover {
+  color: var(--text-primary);
+}
+
+.agent-detail-name {
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--text-primary);
+}
+
+.agent-detail-role {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+.agent-detail-task {
+  margin-top: 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-muted);
+}
+
+.agent-detail-row {
+  margin-top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.agent-detail-status {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--status-idle);
+  flex-shrink: 0;
+}
+
+.agent-detail[data-status="active"] .agent-detail-status {
+  color: var(--status-active);
+}
+.agent-detail[data-status="warning"] .agent-detail-status {
+  color: var(--status-warning);
+}
+.agent-detail[data-status="error"] .agent-detail-status {
+  color: var(--status-error);
+}
+
+.agent-detail-load-track {
+  flex: 1;
+  height: 4px;
+  border-radius: 4px;
+  background: rgba(140, 170, 220, 0.14);
+  overflow: hidden;
+}
+
+.agent-detail-load-fill {
+  height: 100%;
+  background: var(--core-cyan);
+  border-radius: 4px;
+}

@@ -1,0 +1,107 @@
+.sidebar {
+  grid-area: sidebar;
+  background: var(--bg-elevated);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 20px 12px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sidebar-label {
+  font-family: var(--font-display);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  padding: 0 8px;
+  margin-bottom: 2px;
+}
+
+.sidebar-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sidebar-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.sidebar-item:hover {
+  background: rgba(140, 170, 220, 0.06);
+  color: var(--text-primary);
+}
+
+.sidebar-item.is-active {
+  background: rgba(85, 230, 193, 0.08);
+  border-color: rgba(85, 230, 193, 0.25);
+  color: var(--text-primary);
+}
+
+.sidebar-item-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-idle);
+  flex-shrink: 0;
+}
+
+.sidebar-item-dot[data-live="true"] {
+  background: var(--status-active);
+  box-shadow: 0 0 6px var(--status-active);
+}
+
+.sidebar-item-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-item-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-faint);
+}
+
+.sidebar-new,
+.sidebar-new-form input {
+  margin-top: auto;
+  padding: 9px 10px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--border-strong);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.sidebar-new:hover {
+  color: var(--core-cyan);
+  border-color: var(--core-cyan);
+}
+
+.sidebar-new-form input {
+  cursor: text;
+  color: var(--text-primary);
+  outline: none;
+}
+
+.sidebar-new-form input:focus {
+  border-color: var(--core-cyan);
+}

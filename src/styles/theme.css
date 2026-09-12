@@ -1,0 +1,79 @@
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+
+:root {
+  --bg: #05070c;
+  --bg-elevated: #0a0e18;
+  --panel: rgba(16, 22, 38, 0.68);
+  --panel-solid: #0e1420;
+  --border: rgba(140, 170, 220, 0.14);
+  --border-strong: rgba(140, 170, 220, 0.28);
+
+  --core-cyan: #55e6c1;
+  --core-violet: #8d7bf5;
+  --accent: #e3a53d;
+
+  --text-primary: #e8ecf5;
+  --text-muted: #7c8aa8;
+  --text-faint: #4b5773;
+
+  --status-idle: #47536e;
+  --status-active: #4dd8b0;
+  --status-warning: #e3a53d;
+  --status-error: #ef5169;
+
+  --font-display: "Orbitron", "Segoe UI", sans-serif;
+  --font-body: "Manrope", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  --radius-md: 10px;
+  --radius-lg: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--core-cyan) 35%, transparent);
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+button {
+  font-family: inherit;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}
