@@ -1,14 +1,19 @@
 import { useState, type FormEvent } from "react";
+import { useAppState } from "../state/AppState";
 import "./CommandBar.css";
 
 export function CommandBar() {
+  const { activeProject, sendPrompt } = useAppState();
   const [value, setValue] = useState("");
+
+  const disabled = !activeProject || activeProject.running;
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!value.trim()) return;
-    // TODO: inoltrare il comando al core Claude Code / ruflo quando collegato al motore reale.
+    if (disabled || !value.trim()) return;
+    const text = value;
     setValue("");
+    void sendPrompt(text);
   }
 
   return (
@@ -18,9 +23,16 @@ export function CommandBar() {
         className="command-bar-input"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="Descrivi l'obiettivo: analizza, implementa, rivedi, indaga…"
+        placeholder={
+          activeProject
+            ? activeProject.running
+              ? "Claude sta lavorando…"
+              : "Descrivi l'obiettivo: analizza, implementa, rivedi, indaga…"
+            : "Crea prima un progetto (scegli una cartella reale)"
+        }
+        disabled={disabled}
       />
-      <button className="command-bar-send" type="submit" aria-label="Invia">
+      <button className="command-bar-send" type="submit" aria-label="Invia" disabled={disabled}>
         ↵
       </button>
     </form>

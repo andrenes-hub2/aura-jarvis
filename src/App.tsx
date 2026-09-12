@@ -4,6 +4,7 @@ import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { JarvisCore } from "./components/JarvisCore";
 import { CommandBar } from "./components/CommandBar";
+import { Transcript } from "./components/Transcript";
 import { LogDrawer } from "./components/LogDrawer";
 import { AgentDetail } from "./components/AgentDetail";
 import type { SubAgent } from "./types";
@@ -19,6 +20,7 @@ function Shell() {
       <Sidebar />
       <div className="app-stage-wrap">
         <JarvisCore onSelectAgent={setSelectedAgent} />
+        <Transcript />
         <CommandBar />
         {selectedAgent && <AgentDetail agent={selectedAgent} onClose={() => setSelectedAgent(null)} />}
       </div>

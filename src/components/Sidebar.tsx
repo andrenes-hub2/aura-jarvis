@@ -1,22 +1,17 @@
-import { useState } from "react";
 import { useAppState } from "../state/AppState";
 import "./Sidebar.css";
 
 export function Sidebar() {
   const { projects, activeProjectId, selectProject, createProject } = useAppState();
-  const [creating, setCreating] = useState(false);
-  const [draftName, setDraftName] = useState("");
-
-  function commitCreate() {
-    const name = draftName.trim();
-    if (name) createProject(name);
-    setDraftName("");
-    setCreating(false);
-  }
 
   return (
     <aside className="sidebar">
       <div className="sidebar-label">Progetti</div>
+
+      {projects.length === 0 && (
+        <p className="sidebar-empty">Nessun progetto. Scegli una cartella reale su cui far lavorare Claude.</p>
+      )}
+
       <nav className="sidebar-list">
         {projects.map((p) => {
           const activeCount = p.agents.filter((a) => a.status === "active").length;
@@ -25,8 +20,9 @@ export function Sidebar() {
               key={p.id}
               className={`sidebar-item ${p.id === activeProjectId ? "is-active" : ""}`}
               onClick={() => selectProject(p.id)}
+              title={p.path}
             >
-              <span className="sidebar-item-dot" data-live={activeCount > 0} />
+              <span className="sidebar-item-dot" data-live={p.running || activeCount > 0} />
               <span className="sidebar-item-name">{p.name}</span>
               <span className="sidebar-item-count">{p.agents.length}</span>
             </button>
@@ -34,27 +30,9 @@ export function Sidebar() {
         })}
       </nav>
 
-      {creating ? (
-        <form
-          className="sidebar-new-form"
-          onSubmit={(e) => {
-            e.preventDefault();
-            commitCreate();
-          }}
-        >
-          <input
-            autoFocus
-            value={draftName}
-            onChange={(e) => setDraftName(e.target.value)}
-            onBlur={commitCreate}
-            placeholder="Nome progetto…"
-          />
-        </form>
-      ) : (
-        <button className="sidebar-new" onClick={() => setCreating(true)}>
-          + Nuovo progetto
-        </button>
-      )}
+      <button className="sidebar-new" onClick={() => void createProject()}>
+        + Nuovo progetto
+      </button>
     </aside>
   );
 }

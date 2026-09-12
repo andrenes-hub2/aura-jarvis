@@ -53,7 +53,7 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
     return () => ro.disconnect();
   }, []);
 
-  const agents = activeProject.agents;
+  const agents = activeProject?.agents ?? [];
   const cx = size.w / 2;
   const cy = size.h / 2;
   const radius = Math.min(size.w, size.h) * 0.34;
@@ -136,14 +136,18 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
     <div className="jarvis-stage" ref={stageRef}>
       <canvas ref={canvasRef} className="jarvis-canvas" />
 
-      <div className="jarvis-core-node" style={{ left: cx, top: cy }}>
+      <div className="jarvis-core-node" data-running={Boolean(activeProject?.running)} style={{ left: cx, top: cy }}>
         <div className="jarvis-core-ring" />
         <div className="jarvis-core-glow" />
         <div className="jarvis-core-label">
           <span className="jarvis-core-title">CLAUDE</span>
-          <span className="jarvis-core-subtitle">core</span>
+          <span className="jarvis-core-subtitle">{activeProject?.running ? "al lavoro…" : "core"}</span>
         </div>
       </div>
+
+      {!activeProject && (
+        <p className="jarvis-empty-hint">Crea un progetto (cartella reale) per iniziare a lavorare con Claude.</p>
+      )}
 
       {positions.map((pos) => (
         <button

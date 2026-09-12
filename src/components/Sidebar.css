@@ -19,6 +19,14 @@
   margin-bottom: 2px;
 }
 
+.sidebar-empty {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-faint);
+  padding: 0 8px;
+  margin: 4px 0 8px;
+}
+
 .sidebar-list {
   display: flex;
   flex-direction: column;
@@ -78,8 +86,7 @@
   color: var(--text-faint);
 }
 
-.sidebar-new,
-.sidebar-new-form input {
+.sidebar-new {
   margin-top: auto;
   padding: 9px 10px;
   border-radius: var(--radius-md);
@@ -93,15 +100,5 @@
 
 .sidebar-new:hover {
   color: var(--core-cyan);
-  border-color: var(--core-cyan);
-}
-
-.sidebar-new-form input {
-  cursor: text;
-  color: var(--text-primary);
-  outline: none;
-}
-
-.sidebar-new-form input:focus {
   border-color: var(--core-cyan);
 }

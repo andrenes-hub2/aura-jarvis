@@ -38,6 +38,16 @@
   color: var(--text-faint);
 }
 
+.command-bar-input:disabled {
+  cursor: not-allowed;
+}
+
+.command-bar-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .command-bar-send {
   width: 32px;
   height: 32px;

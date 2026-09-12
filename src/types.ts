@@ -23,6 +23,11 @@ export interface Project {
   name: string;
   path: string;
   agents: SubAgent[];
+  logs: LogEntry[];
+  messages: ChatMessage[];
+  sessionId?: string;
+  running?: boolean;
+  useRuflo?: boolean;
 }
 
 export interface LogEntry {
@@ -31,4 +36,11 @@ export interface LogEntry {
   agent: string;
   message: string;
   level: "info" | "warning" | "error";
+}
+
+export interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  time: string;
 }

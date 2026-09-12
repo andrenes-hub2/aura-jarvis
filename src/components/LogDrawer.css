@@ -34,6 +34,11 @@
   height: calc(100% - 42px);
 }
 
+.log-drawer-empty {
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
 .log-line {
   display: flex;
   flex-direction: column;

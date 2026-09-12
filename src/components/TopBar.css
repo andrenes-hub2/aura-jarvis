@@ -69,8 +69,17 @@
   width: 6px;
   height: 6px;
   border-radius: 50%;
+  background: var(--status-idle);
+}
+
+.topbar-auth[data-status="connected"] .topbar-auth-dot {
   background: var(--status-active);
   box-shadow: 0 0 6px var(--status-active);
+}
+
+.topbar-auth[data-status="unavailable"] .topbar-auth-dot {
+  background: var(--status-error);
+  box-shadow: 0 0 6px var(--status-error);
 }
 
 .topbar-btn {
