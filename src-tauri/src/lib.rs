@@ -1,6 +1,7 @@
 mod files;
 mod secrets;
 mod setup;
+mod staticserver;
 mod terminal;
 
 use serde::Serialize;
@@ -212,6 +213,7 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .manage(terminal::TerminalRegistry::default())
+        .manage(staticserver::StaticServerRegistry::default())
         .invoke_handler(tauri::generate_handler![
             send_prompt,
             check_engine,
@@ -227,7 +229,8 @@ pub fn run() {
             terminal::open_terminal,
             terminal::write_terminal,
             terminal::resize_terminal,
-            terminal::close_terminal
+            terminal::close_terminal,
+            staticserver::start_static_server
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -46,7 +46,7 @@ export function SidePanel() {
         )}
         {everOpened.has("web") && (
           <div className="side-panel-pane" hidden={mode !== "web"}>
-            <WebPreview projectPath={activeProject.path} />
+            <WebPreview projectId={activeProject.id} projectPath={activeProject.path} />
           </div>
         )}
       </aside>

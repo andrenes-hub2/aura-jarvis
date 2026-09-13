@@ -1,26 +1,12 @@
 import { useState, type FormEvent } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { invoke } from "@tauri-apps/api/core";
 import "./WebPreview.css";
 
-/**
- * A plain `file://` URL inside an <iframe> is blocked by the webview's own
- * security model when the parent page isn't itself served from `file://`
- * (ours is served from the dev server / the `tauri://` origin in a release
- * build) — it silently fails as a refused connection. Tauri's asset
- * protocol is the sanctioned way around that: it serves a local path
- * through an origin the webview already trusts, gated by the `scope`
- * allow-list in tauri.conf.json.
- */
-function toAssetUrl(projectPath: string, relative: string) {
-  const normalized = projectPath.replace(/\\/g, "/");
-  const withSlash = normalized.endsWith("/") ? normalized : `${normalized}/`;
-  return convertFileSrc(`${withSlash}${relative}`);
-}
-
-export function WebPreview({ projectPath }: { projectPath: string }) {
+export function WebPreview({ projectId, projectPath }: { projectId: string; projectPath: string }) {
   const [draft, setDraft] = useState("http://localhost:3000");
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  const [starting, setStarting] = useState(false);
 
   function go(url: string) {
     setDraft(url);
@@ -33,6 +19,22 @@ export function WebPreview({ projectPath }: { projectPath: string }) {
     go(draft);
   }
 
+  async function openStatic() {
+    // A file:// or asset-protocol src loads the HTML, but WebView2 is
+    // strict enough about script MIME types on a non-http origin that
+    // <script src> tags silently never run — buttons look present but do
+    // nothing. A real (if minimal) local HTTP server sidesteps that
+    // entirely, the same way Claude Code's own Playwright tooling
+    // previews a static site.
+    setStarting(true);
+    try {
+      const port = await invoke<number>("start_static_server", { projectId, path: projectPath });
+      go(`http://127.0.0.1:${port}/index.html`);
+    } finally {
+      setStarting(false);
+    }
+  }
+
   return (
     <div className="webpreview">
       <form className="webpreview-bar" onSubmit={handleSubmit}>
@@ -40,7 +42,7 @@ export function WebPreview({ projectPath }: { projectPath: string }) {
           className="webpreview-input"
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
-          placeholder="http://localhost:3000 oppure file:///…"
+          placeholder="http://localhost:3000"
         />
         <button type="submit" className="webpreview-go">
           Vai
@@ -53,7 +55,9 @@ export function WebPreview({ projectPath }: { projectPath: string }) {
       </form>
 
       <div className="webpreview-quick">
-        <button onClick={() => go(toAssetUrl(projectPath, "index.html"))}>Apri index.html</button>
+        <button onClick={() => void openStatic()} disabled={starting}>
+          {starting ? "Avvio…" : "Apri index.html"}
+        </button>
         <button onClick={() => go("http://localhost:3000")}>localhost:3000</button>
         <button onClick={() => go("http://localhost:5173")}>localhost:5173 (Vite)</button>
       </div>
@@ -62,7 +66,7 @@ export function WebPreview({ projectPath }: { projectPath: string }) {
         <iframe key={reloadKey} src={loadedUrl} className="webpreview-frame" title="Anteprima progetto" />
       ) : (
         <p className="webpreview-empty">
-          Inserisci l'indirizzo del server di sviluppo del progetto, o apri direttamente un file HTML statico.
+          Inserisci l'indirizzo del server di sviluppo del progetto, o apri direttamente un sito statico.
         </p>
       )}
     </div>
