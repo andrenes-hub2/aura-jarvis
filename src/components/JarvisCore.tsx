@@ -140,7 +140,7 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
         <div className="jarvis-core-ring" />
         <div className="jarvis-core-glow" />
         <div className="jarvis-core-label">
-          <span className="jarvis-core-title">CLAUDE</span>
+          <span className="jarvis-core-title">AURA</span>
           <span className="jarvis-core-subtitle">{activeProject?.running ? "al lavoro…" : "core"}</span>
         </div>
       </div>

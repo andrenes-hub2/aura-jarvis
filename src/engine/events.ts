@@ -83,7 +83,7 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
             const agent = agents.find((a) => a.id === parentId);
             logs.push(makeLog(agent?.name ?? "sub-agente", truncate(block.text, 160)));
           } else {
-            logs.push(makeLog("Claude", truncate(block.text, 160)));
+            logs.push(makeLog("Aura", truncate(block.text, 160)));
             messages.push({ id: nextMessageId(), role: "assistant", text: block.text.trim(), time: nowTime() });
           }
         }
@@ -104,10 +104,10 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
               },
             );
             logs.push(
-              makeLog("Claude", `Avvia sub-agente: ${subagentType ?? block.id.slice(0, 8)} — ${truncate(description, 100)}`),
+              makeLog("Aura", `Avvia sub-agente: ${subagentType ?? block.id.slice(0, 8)} — ${truncate(description, 100)}`),
             );
           } else {
-            const label = parentId ? agents.find((a) => a.id === parentId)?.name ?? "sub-agente" : "Claude";
+            const label = parentId ? agents.find((a) => a.id === parentId)?.name ?? "sub-agente" : "Aura";
             logs.push(makeLog(label, `Tool: ${block.name}`));
           }
         }

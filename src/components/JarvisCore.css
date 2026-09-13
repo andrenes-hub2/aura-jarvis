@@ -51,16 +51,16 @@
 .jarvis-core-title {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 12px;
-  letter-spacing: 0.14em;
+  font-size: 15px;
+  letter-spacing: 0.1em;
   color: #051510;
 }
 
 .jarvis-core-subtitle {
   font-family: var(--font-mono);
-  font-size: 8px;
-  letter-spacing: 0.1em;
-  color: rgba(5, 21, 16, 0.65);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: rgba(5, 21, 16, 0.7);
   text-transform: uppercase;
 }
 
@@ -161,17 +161,17 @@
 
 .jarvis-agent-name {
   font-family: var(--font-display);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--text-primary);
   white-space: nowrap;
 }
 
 .jarvis-agent-role {
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10.5px;
   color: var(--text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
 }

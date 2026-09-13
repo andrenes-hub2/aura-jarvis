@@ -17,9 +17,9 @@
 
 .command-bar-prompt {
   font-family: var(--font-display);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.14em;
+  letter-spacing: 0.12em;
   color: var(--accent);
   flex-shrink: 0;
 }

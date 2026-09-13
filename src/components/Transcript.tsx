@@ -29,13 +29,13 @@ export function Transcript() {
         <div className="transcript-body" ref={bodyRef}>
           {messages.map((m) => (
             <div key={m.id} className="transcript-message" data-role={m.role}>
-              <span className="transcript-author">{m.role === "user" ? "Tu" : "Claude"}</span>
+              <span className="transcript-author">{m.role === "user" ? "Tu" : "Aura"}</span>
               <p className="transcript-text">{m.text}</p>
             </div>
           ))}
           {activeProject?.running && (
             <div className="transcript-message" data-role="assistant" data-pending="true">
-              <span className="transcript-author">Claude</span>
+              <span className="transcript-author">Aura</span>
               <p className="transcript-text transcript-thinking">
                 <span />
                 <span />

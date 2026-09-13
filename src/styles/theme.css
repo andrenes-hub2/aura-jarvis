@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 
 :root {
   --bg: #05070c;
@@ -21,7 +21,7 @@
   --status-warning: #e3a53d;
   --status-error: #ef5169;
 
-  --font-display: "Orbitron", "Segoe UI", sans-serif;
+  --font-display: "Rajdhani", "Segoe UI", sans-serif;
   --font-body: "Manrope", "Segoe UI", system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 

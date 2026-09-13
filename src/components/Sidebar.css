@@ -11,8 +11,9 @@
 
 .sidebar-label {
   font-family: var(--font-display);
-  font-size: 10px;
-  letter-spacing: 0.16em;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-faint);
   padding: 0 8px;
