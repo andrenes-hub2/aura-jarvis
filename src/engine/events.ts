@@ -149,7 +149,10 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
           const bare = bareToolName(block.name ?? "");
 
           if (block.name === "Task") {
-            // Claude Code's own native sub-agent mechanism.
+            // Claude Code's own native sub-agent mechanism. `parentId` here
+            // is the *calling* agent's id (null if the top-level session
+            // itself made the call) — exactly the hierarchy edge needed to
+            // draw this node under its real parent instead of the core.
             const subagentType: string | undefined = block.input?.subagent_type;
             const description: string = block.input?.description ?? block.input?.prompt ?? "Nuovo task";
             upsertAgent(
@@ -161,6 +164,7 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
                 status: "active",
                 task: truncate(description),
                 load: 0.6,
+                parentId: parentId ?? undefined,
               },
             );
             logs.push(
@@ -182,6 +186,7 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
                 status: "idle",
                 task: truncate(task),
                 load: 0.15,
+                parentId: parentId ?? undefined,
               },
             );
             logs.push(makeLog("Aura", `ruflo: registra agente ${agentType ?? block.id}`));
@@ -200,6 +205,7 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
                   status: "active",
                   task: truncate(prompt),
                   load: 0.75,
+                  parentId: parentId ?? undefined,
                 },
               );
               const label = agents.find((a) => a.id === agentId)?.name ?? agentId;

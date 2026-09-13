@@ -27,3 +27,7 @@ dist
 src-tauri/target
 *.log
 .secrets
+
+# ruflo/claude-flow runtime state (created when running ruflo against this repo itself)
+.claude-flow
+.swarm

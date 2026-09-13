@@ -16,6 +16,8 @@ export interface SubAgent {
   status: AgentStatus;
   task: string;
   load: number; // 0-1, drives the node's activity ring
+  /** Id of the agent that spawned this one; absent means it's a direct child of AURA core. */
+  parentId?: string;
 }
 
 export interface Project {
