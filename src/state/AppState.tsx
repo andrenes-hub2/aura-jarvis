@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Project } from "../types";
-import { applyAgentEvent, type EngineState } from "../engine/events";
+import { applyAgentEvent, nextLogId, nextMessageId, type EngineState } from "../engine/events";
 
 const STORAGE_KEY = "aura.projects.v1";
 const HISTORY_LIMIT = 300;
@@ -44,7 +44,7 @@ interface AppStateShape {
   selectProject: (id: string) => void;
   createProject: () => Promise<void>;
   toggleFullAuto: (projectId: string) => void;
-  sendPrompt: (text: string) => Promise<void>;
+  sendPrompt: (text: string, attachmentPaths?: string[]) => Promise<void>;
 }
 
 const AppStateContext = createContext<AppStateShape | null>(null);
@@ -66,51 +66,62 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
       .catch(() => setEngineStatus("unavailable"));
   }, []);
 
-  // Stream real Claude Code events for whichever project is currently active.
+  // Stream real Claude Code events for every project, not just the active
+  // one — a project left running in the background while the user switches
+  // tabs keeps emitting on its own `agent-event:<id>` channel, and Tauri's
+  // emit doesn't queue events for a channel with no listener, so a
+  // subscription scoped to only `activeProjectId` silently dropped every
+  // event a background project produced while it wasn't in focus.
+  const projectIdsKey = projects.map((p) => p.id).join(",");
   useEffect(() => {
-    if (!activeProjectId) return;
-    const channel = `agent-event:${activeProjectId}`;
-    let cancelled = false;
-    let unlisten: (() => void) | undefined;
+    const ids = projectIdsKey ? projectIdsKey.split(",") : [];
+    const subs = ids.map((id) => {
+      const channel = `agent-event:${id}`;
+      const state = { cancelled: false, unlisten: undefined as (() => void) | undefined };
 
-    listen<{ event: unknown }>(channel, (e) => {
-      setProjects((prev) =>
-        prev.map((p) => {
-          if (p.id !== activeProjectId) return p;
-          const result = applyAgentEvent(
-            {
-              agents: p.agents,
-              logs: p.logs,
-              messages: p.messages,
-              sessionId: p.sessionId,
-              pendingToolUse: (p.pendingToolUse as EngineState["pendingToolUse"]) ?? {},
-            },
-            e.payload.event,
-          );
-          return {
-            ...p,
-            agents: result.agents,
-            logs: result.logs,
-            messages: result.messages,
-            sessionId: result.sessionId ?? p.sessionId,
-            pendingToolUse: result.pendingToolUse,
-          };
-        }),
-      );
-    }).then((fn) => {
-      // React (StrictMode, in dev) can mount -> cleanup -> mount again before
-      // this promise settles; the first cleanup runs while `unlisten` is
-      // still undefined and can't call it, so without this check that first
-      // subscription leaks and every event gets applied twice.
-      if (cancelled) fn();
-      else unlisten = fn;
+      listen<{ event: unknown }>(channel, (e) => {
+        setProjects((prev) =>
+          prev.map((p) => {
+            if (p.id !== id) return p;
+            const result = applyAgentEvent(
+              {
+                agents: p.agents,
+                logs: p.logs,
+                messages: p.messages,
+                sessionId: p.sessionId,
+                pendingToolUse: (p.pendingToolUse as EngineState["pendingToolUse"]) ?? {},
+              },
+              e.payload.event,
+            );
+            return {
+              ...p,
+              agents: result.agents,
+              logs: result.logs,
+              messages: result.messages,
+              sessionId: result.sessionId ?? p.sessionId,
+              pendingToolUse: result.pendingToolUse,
+            };
+          }),
+        );
+      }).then((fn) => {
+        // React (StrictMode, in dev) can mount -> cleanup -> mount again before
+        // this promise settles; the first cleanup runs while `unlisten` is
+        // still undefined and can't call it, so without this check that first
+        // subscription leaks and every event gets applied twice.
+        if (state.cancelled) fn();
+        else state.unlisten = fn;
+      });
+
+      return state;
     });
 
     return () => {
-      cancelled = true;
-      unlisten?.();
+      for (const state of subs) {
+        state.cancelled = true;
+        state.unlisten?.();
+      }
     };
-  }, [activeProjectId]);
+  }, [projectIdsKey]);
 
   const activeProject = useMemo(
     () => projects.find((p) => p.id === activeProjectId) ?? null,
@@ -147,7 +158,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, fullAuto: !p.fullAuto } : p)));
   }
 
-  async function sendPrompt(text: string) {
+  async function sendPrompt(text: string, attachmentPaths: string[] = []) {
     const project = projects.find((p) => p.id === activeProjectIdRef.current);
     if (!project || project.running || !text.trim()) return;
 
@@ -158,8 +169,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
           ? {
               ...p,
               running: true,
-              logs: [...p.logs, { id: `local-${Date.now()}`, time: now, agent: "Tu", message: text, level: "info" }],
-              messages: [...p.messages, { id: `local-${Date.now()}`, role: "user", text, time: now }],
+              logs: [...p.logs, { id: nextLogId(), time: now, agent: "Tu", message: text, level: "info" }],
+              messages: [...p.messages, { id: nextMessageId(), role: "user", text, time: now }],
             }
           : p,
       ),
@@ -172,6 +183,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         prompt: text,
         resumeSessionId: project.sessionId,
         fullAuto: Boolean(project.fullAuto),
+        attachmentPaths,
       });
       setProjects((prev) =>
         prev.map((p) => (p.id === project.id ? { ...p, running: false, sessionId: sessionId || p.sessionId } : p)),
@@ -186,7 +198,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
                 logs: [
                   ...p.logs,
                   {
-                    id: `err-${Date.now()}`,
+                    id: nextLogId(),
                     time: new Date().toLocaleTimeString("it-IT", { hour12: false }),
                     agent: "sistema",
                     message: String(err),

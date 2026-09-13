@@ -1,4 +1,5 @@
 mod files;
+mod logging;
 mod optimizer;
 mod procutil;
 mod remote;
@@ -11,8 +12,7 @@ use procutil::tokio_command;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
-use std::sync::OnceLock;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::{AsyncBufReadExt, BufReader};
 
 #[derive(Clone, Serialize)]
@@ -30,25 +30,29 @@ struct AgentEventPayload {
 /// (`node_modules/@anthropic-ai/claude-code/bin/claude.exe`); we target
 /// that directly so we never have to round-trip through cmd.exe (which
 /// would also mangle prompt text containing `&`, `|`, `%%`, or quotes).
-pub(crate) fn claude_binary() -> &'static PathBuf {
-    static RESOLVED: OnceLock<PathBuf> = OnceLock::new();
-    RESOLVED.get_or_init(|| {
-        if cfg!(target_os = "windows") {
-            if let Ok(appdata) = std::env::var("APPDATA") {
-                let candidate = PathBuf::from(appdata)
-                    .join("npm")
-                    .join("node_modules")
-                    .join("@anthropic-ai")
-                    .join("claude-code")
-                    .join("bin")
-                    .join("claude.exe");
-                if candidate.exists() {
-                    return candidate;
-                }
+///
+/// Deliberately not cached: a `OnceLock` here meant that if Claude Code
+/// wasn't installed yet on first call, every later call — including right
+/// after installing it from the Setup panel — kept getting back the same
+/// unresolved "claude" fallback for the rest of the app's lifetime, so a
+/// fresh install only took effect after a full restart. The check itself
+/// is one env var read plus one `exists()` stat, cheap enough to redo.
+pub(crate) fn claude_binary() -> PathBuf {
+    if cfg!(target_os = "windows") {
+        if let Ok(appdata) = std::env::var("APPDATA") {
+            let candidate = PathBuf::from(appdata)
+                .join("npm")
+                .join("node_modules")
+                .join("@anthropic-ai")
+                .join("claude-code")
+                .join("bin")
+                .join("claude.exe");
+            if candidate.exists() {
+                return candidate;
             }
         }
-        PathBuf::from("claude")
-    })
+    }
+    PathBuf::from("claude")
 }
 
 /// `npx -y ruflo ...` re-fetches the package into a fresh, isolated npx
@@ -83,7 +87,7 @@ pub(crate) async fn run_claude_stream(
     args: Vec<String>,
     envs: Vec<(String, String)>,
 ) -> Result<String, String> {
-    eprintln!("[aura] run_claude_stream: bin={:?} dir={cwd:?} args={args:?}", claude_binary());
+    logging::log(format!("run_claude_stream: bin={:?} dir={cwd:?} args={args:?}", claude_binary()));
 
     let mut cmd = tokio_command(claude_binary());
     cmd.args(&args)
@@ -97,7 +101,7 @@ pub(crate) async fn run_claude_stream(
         .spawn()
         .map_err(|e| format!("Impossibile avviare Claude Code ('claude' e' nel PATH?): {e}"))?;
 
-    eprintln!("[aura] run_claude_stream: spawned pid={:?}", child.id());
+    logging::log(format!("run_claude_stream: spawned pid={:?}", child.id()));
 
     let stdout = child.stdout.take().ok_or("nessuno stdout dal processo claude")?;
     let stderr = child.stderr.take().ok_or("nessuno stderr dal processo claude")?;
@@ -112,17 +116,17 @@ pub(crate) async fn run_claude_stream(
                 match line.map_err(|e| e.to_string())? {
                     Some(line) => {
                         if line.trim().is_empty() { continue; }
-                        eprintln!("[aura] run_claude_stream: line: {}", &line[..line.len().min(2000)]);
+                        logging::log(format!("run_claude_stream: line: {}", &line[..line.len().min(2000)]));
                         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
                             if let Some(sid) = value.get("session_id").and_then(|v| v.as_str()) {
                                 session_id = sid.to_string();
                             }
                             match app.emit(&channel, AgentEventPayload { event: value }) {
                                 Ok(()) => {}
-                                Err(e) => eprintln!("[aura] run_claude_stream: emit failed: {e}"),
+                                Err(e) => logging::log(format!("run_claude_stream: emit failed: {e}")),
                             }
                         } else {
-                            eprintln!("[aura] run_claude_stream: failed to parse line as JSON");
+                            logging::log("run_claude_stream: failed to parse line as JSON");
                         }
                     }
                     None => break,
@@ -140,9 +144,9 @@ pub(crate) async fn run_claude_stream(
         }
     }
 
-    eprintln!("[aura] run_claude_stream: stdout/stderr closed, waiting on child");
+    logging::log("run_claude_stream: stdout/stderr closed, waiting on child");
     let status = child.wait().await.map_err(|e| e.to_string())?;
-    eprintln!("[aura] run_claude_stream: child exited with status={status} session_id={session_id}");
+    logging::log(format!("run_claude_stream: child exited with status={status} session_id={session_id}"));
     if !status.success() && session_id.is_empty() {
         return Err(format!("Sessione Claude Code terminata con errore ({status})"));
     }
@@ -156,6 +160,14 @@ pub(crate) async fn run_claude_stream(
 /// matching task type" and falls back to doing the work itself directly;
 /// this instruction forecloses both escape hatches.
 const RUFLO_MANDATORY_PROMPT: &str = "Per QUALSIASI richiesta dell'utente, indipendentemente dalla sua semplicita' o complessita' apparente, devi sempre delegarla tramite i tool mcp__ruflo__* (es. agent_spawn seguito da agent_execute, o swarm_init quando serve coordinamento tra piu' agenti). Non eseguire mai direttamente tu stesso un task che potresti in teoria fare da solo (leggere/scrivere un file, rispondere a una domanda, una piccola modifica): usa comunque ruflo per farlo eseguire da un sub-agente. Non rifiutare mai di usare ruflo dicendo che 'non ha un tipo di task corrispondente': se non esiste un tipo di agente specifico per la richiesta, spawna un agente general-purpose e descrivigli il compito in linguaggio naturale. Il tuo ruolo e' orchestrare tramite ruflo, non eseguire il lavoro in prima persona. Non prescrivere numero o ruoli specifici di agenti oltre a quanto serve per avviare la delega: lascia che sia ruflo a decidere autonomamente come comporre il proprio swarm.";
+
+/// Without this, "analizza/revisiona questa cartella" on a real dev
+/// project (this one included: src-tauri/target alone is ~13GB and 18k
+/// files after a release build) sends agents walking build output and
+/// dependency trees no one asked about, burning CPU/RAM until the whole
+/// app becomes unresponsive or gets killed by the OS. Mirrors the same
+/// hidden-directories list the file panel already uses (files.rs).
+const DIRECTORY_HYGIENE_PROMPT: &str = "Quando esplori, analizzi o revisioni una cartella di progetto, ignora sempre le directory di build/dipendenze/output (node_modules, target, dist, build, .git, .next, .venv, venv, __pycache__, .cache) a meno che l'utente non chieda esplicitamente di guardare dentro una di esse: non elencarne il contenuto, non leggerne i file, non lanciare comandi che le attraversano ricorsivamente (find, dir /s, grep -r senza esclusioni). Se un progetto le contiene, limitati al codice sorgente e alla configurazione.";
 
 /// "Full auto": no permission prompts for any tool (Bash, Edit, npm
 /// installs, MCP tools included), and an explicit instruction not to
@@ -183,6 +195,7 @@ async fn send_prompt(
     prompt: String,
     resume_session_id: Option<String>,
     full_auto: bool,
+    attachment_paths: Vec<String>,
 ) -> Result<String, String> {
     let mut args = vec![
         "-p".to_string(),
@@ -197,12 +210,35 @@ async fn send_prompt(
         ruflo_mcp_config(),
     ];
 
+    // The attach picker lets the user pick a file from anywhere, not just
+    // inside the project — Claude can only read paths under a directory
+    // it was given via --add-dir, so without this an attachment outside
+    // the project silently failed to open ("File allegato: ..." in the
+    // prompt, but no access to actually read it).
+    let project_path_canon = Path::new(&project_path).canonicalize().unwrap_or_else(|_| PathBuf::from(&project_path));
+    let mut extra_dirs: Vec<String> = Vec::new();
+    for attachment in &attachment_paths {
+        if let Some(parent) = Path::new(attachment).parent() {
+            let parent_canon = parent.canonicalize().unwrap_or_else(|_| parent.to_path_buf());
+            if !parent_canon.starts_with(&project_path_canon) {
+                let parent_str = parent_canon.to_string_lossy().into_owned();
+                if !extra_dirs.contains(&parent_str) {
+                    extra_dirs.push(parent_str);
+                }
+            }
+        }
+    }
+    for dir in extra_dirs {
+        args.push("--add-dir".to_string());
+        args.push(dir);
+    }
+
     if let Some(sid) = resume_session_id.filter(|s| !s.is_empty()) {
         args.push("--resume".to_string());
         args.push(sid);
     }
 
-    let mut system_prompt = RUFLO_MANDATORY_PROMPT.to_string();
+    let mut system_prompt = format!("{RUFLO_MANDATORY_PROMPT} {DIRECTORY_HYGIENE_PROMPT}");
     if full_auto {
         args.push("--permission-mode".to_string());
         args.push("bypassPermissions".to_string());
@@ -218,7 +254,20 @@ async fn send_prompt(
     // process (never the whole app), and read from the OS keychain —
     // never a file or localStorage. Absent, agent_execute alone will fail;
     // agent_spawn/agent_status/etc. don't need it.
-    let envs = secrets::stored_api_key().map(|key| vec![("ANTHROPIC_API_KEY".to_string(), key)]).unwrap_or_default();
+    let mut envs = secrets::stored_api_key().map(|key| vec![("ANTHROPIC_API_KEY".to_string(), key)]).unwrap_or_default();
+
+    // Claude Code and ruflo's MCP server both run on Node/V8, which caps
+    // its own heap well below what's physically installed (a default
+    // around 2-4GB) unless told otherwise — a machine with 64GB of RAM
+    // gets no benefit from it by default. A heavy analysis/review task
+    // that ends up holding a lot of tool output in memory can hit that
+    // self-imposed ceiling and crash with "JavaScript heap out of memory",
+    // which surfaces as the session abruptly restarting mid-task. This
+    // env var only reaches this child process and whatever it spawns
+    // (ruflo's server included, via normal env inheritance).
+    envs.push(("NODE_OPTIONS".to_string(), "--max-old-space-size=8192".to_string()));
+
+    let envs = envs;
 
     let channel = format!("agent-event:{project_id}");
     let project_path_buf = PathBuf::from(&project_path);
@@ -244,6 +293,7 @@ async fn check_engine() -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    logging::init();
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
@@ -272,6 +322,15 @@ pub fn run() {
             remote::stop_remote_view,
             remote::push_remote_snapshot
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            // Terminal sessions are deliberately kept alive across panel
+            // show/hide (so switching tabs doesn't kill a running command)
+            // but nothing was ever killing them on real app shutdown,
+            // leaving orphaned shell processes behind.
+            if let tauri::RunEvent::Exit = event {
+                app_handle.state::<terminal::TerminalRegistry>().close_all();
+            }
+        });
 }

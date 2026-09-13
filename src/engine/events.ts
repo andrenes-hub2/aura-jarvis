@@ -1,15 +1,31 @@
 import type { AgentRole, ChatMessage, LogEntry, SubAgent } from "../types";
 
 let logCounter = 0;
-function nextLogId() {
+export function nextLogId() {
   logCounter += 1;
   return `log-${Date.now()}-${logCounter}`;
 }
 
 let messageCounter = 0;
-function nextMessageId() {
+export function nextMessageId() {
   messageCounter += 1;
   return `msg-${Date.now()}-${messageCounter}`;
+}
+
+// logs/messages are already capped by AppState's HISTORY_LIMIT on
+// persistence; `agents` never was, and now that ruflo runs for every
+// prompt (not just opt-in ones) a long session spawns one every request —
+// unbounded growth in memory otherwise. Idle/error/done agents get dropped
+// first so a node that's actually still working never disappears.
+const AGENT_HISTORY_LIMIT = 200;
+
+function pruneAgents(agents: SubAgent[]): SubAgent[] {
+  if (agents.length <= AGENT_HISTORY_LIMIT) return agents;
+  const active = agents.filter((a) => a.status === "active");
+  const inactive = agents.filter((a) => a.status !== "active");
+  const keepInactive = inactive.slice(-Math.max(0, AGENT_HISTORY_LIMIT - active.length));
+  const keepIds = new Set([...active, ...keepInactive].map((a) => a.id));
+  return agents.filter((a) => keepIds.has(a.id));
 }
 
 function nowTime() {
@@ -260,5 +276,5 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
       break;
   }
 
-  return { agents, logs, messages, sessionId, pendingToolUse };
+  return { agents: pruneAgents(agents), logs, messages, sessionId, pendingToolUse };
 }

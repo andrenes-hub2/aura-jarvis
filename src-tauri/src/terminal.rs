@@ -13,6 +13,22 @@ struct TerminalSession {
 #[derive(Default)]
 pub struct TerminalRegistry(Mutex<HashMap<String, TerminalSession>>);
 
+impl TerminalRegistry {
+    /// Kills every open PTY-backed shell. Nothing else does this — closing
+    /// the terminal panel only tears down the frontend xterm instance, by
+    /// design, so switching side-panel tabs doesn't kill a long-running
+    /// command. Without this called on app exit, every shell a session
+    /// ever opened outlives the app itself as an orphaned process.
+    pub fn close_all(&self) {
+        if let Ok(mut sessions) = self.0.lock() {
+            for (_, mut session) in sessions.drain() {
+                let _ = session.child.kill();
+                let _ = session.child.wait();
+            }
+        }
+    }
+}
+
 fn default_shell() -> CommandBuilder {
     if cfg!(target_os = "windows") {
         CommandBuilder::new("powershell.exe")
@@ -95,6 +111,10 @@ pub fn close_terminal(registry: State<TerminalRegistry>, project_id: String) -> 
     let mut sessions = registry.0.lock().map_err(|e| e.to_string())?;
     if let Some(mut session) = sessions.remove(&project_id) {
         let _ = session.child.kill();
+        // `kill()` alone leaves a zombie on Unix (the exit status is never
+        // reaped) and doesn't guarantee the shell is actually gone before
+        // this returns on any platform — wait for it.
+        let _ = session.child.wait();
     }
     Ok(())
 }

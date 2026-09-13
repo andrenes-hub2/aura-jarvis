@@ -81,10 +81,20 @@ export function FileExplorer({ projectPath }: { projectPath: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     setRoots(null);
     setSelectedPath(null);
     setContent(null);
-    invoke<FileEntry[]>("list_dir", { path: projectPath }).then(setRoots);
+    invoke<FileEntry[]>("list_dir", { path: projectPath }).then((entries) => {
+      // A fast project switch can leave an older `list_dir` call still in
+      // flight when a newer one starts; without this guard, whichever
+      // resolves last wins and can overwrite the tree with the wrong
+      // project's files.
+      if (!cancelled) setRoots(entries);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [projectPath]);
 
   async function selectFile(path: string) {

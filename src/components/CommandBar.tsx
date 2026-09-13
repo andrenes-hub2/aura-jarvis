@@ -35,7 +35,7 @@ export function CommandBar() {
     const text = attachmentLines ? `${attachmentLines}\n\n${value}` : value;
     setValue("");
     setAttachments([]);
-    void sendPrompt(text);
+    void sendPrompt(text, attachments);
   }
 
   return (

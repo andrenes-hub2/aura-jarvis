@@ -21,9 +21,19 @@ pub async fn save_api_key(key: String) -> Result<(), String> {
     entry.set_password(&key).map_err(|e| e.to_string())
 }
 
+/// Distinguishes "no key configured" (`Ok(false)`) from a real failure to
+/// reach the OS credential store (`Err`) — collapsing both into a plain
+/// bool (as a bare `.ok()` on the lookup would) meant a locked keychain or
+/// a permissions problem silently looked identical to "just not set up
+/// yet" in the Setup panel.
 #[tauri::command]
-pub fn has_api_key() -> bool {
-    stored_api_key().is_some()
+pub fn has_api_key() -> Result<bool, String> {
+    let entry = keyring::Entry::new(SERVICE, ACCOUNT).map_err(|e| e.to_string())?;
+    match entry.get_password() {
+        Ok(_) => Ok(true),
+        Err(keyring::Error::NoEntry) => Ok(false),
+        Err(e) => Err(e.to_string()),
+    }
 }
 
 #[tauri::command]

@@ -3,7 +3,6 @@ use crate::procutil::{std_command, tokio_command};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Stdio;
-use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Command;
@@ -54,24 +53,26 @@ fn home_dir() -> Option<PathBuf> {
 /// or by this app's own Setup panel) is invisible to it until the next
 /// logoff/reboot, even though a freshly-opened terminal sees it fine.
 fn node_dir() -> Option<PathBuf> {
-    static DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
-    DIR.get_or_init(|| {
-        for fixed in [r"C:\Program Files\nodejs", r"C:\Program Files (x86)\nodejs"] {
-            let candidate = PathBuf::from(fixed);
-            if candidate.join("node.exe").exists() {
-                return Some(candidate);
-            }
+    // Deliberately not cached in a OnceLock: this used to remember a
+    // negative result (Node not found) for the app's entire lifetime, so
+    // clicking "Installa" in the Setup panel and succeeding still left the
+    // diagnostics permanently reporting "non trovato" until the app was
+    // restarted. The underlying checks are a couple of fixed-path stats and
+    // (at worst) one `where` call — cheap enough to just redo every time.
+    for fixed in [r"C:\Program Files\nodejs", r"C:\Program Files (x86)\nodejs"] {
+        let candidate = PathBuf::from(fixed);
+        if candidate.join("node.exe").exists() {
+            return Some(candidate);
         }
+    }
 
-        let output = std_command("where").arg("node").output().ok()?;
-        if !output.status.success() {
-            return None;
-        }
-        let text = String::from_utf8_lossy(&output.stdout);
-        let first = text.lines().next()?.trim();
-        Some(PathBuf::from(first).parent()?.to_path_buf())
-    })
-    .clone()
+    let output = std_command("where").arg("node").output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout);
+    let first = text.lines().next()?.trim();
+    Some(PathBuf::from(first).parent()?.to_path_buf())
 }
 
 /// Same fixed-path-first reasoning as `node_dir`: a bare `"node"` also

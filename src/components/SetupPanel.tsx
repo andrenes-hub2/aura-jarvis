@@ -40,7 +40,12 @@ export function SetupPanel({ open, onClose }: { open: boolean; onClose: () => vo
   useEffect(() => {
     if (open) {
       void runDiagnostics();
-      invoke<boolean>("has_api_key").then(setApiKeyConfigured).catch(() => setApiKeyConfigured(false));
+      invoke<boolean>("has_api_key")
+        .then(setApiKeyConfigured)
+        .catch((err) => {
+          setApiKeyConfigured(false);
+          setApiKeyResult({ ok: false, message: `Impossibile leggere il gestore credenziali: ${String(err)}` });
+        });
     }
   }, [open, runDiagnostics]);
 

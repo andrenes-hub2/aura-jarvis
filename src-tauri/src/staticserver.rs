@@ -26,17 +26,26 @@ fn content_type(path: &Path) -> &'static str {
     }
 }
 
-/// Resolves a URL path against the project root, rejecting `..` segments
-/// so the preview can't be tricked into serving files outside the project.
+/// Resolves a URL path against the project root, so the preview can't be
+/// tricked into serving files outside the project. Only accepts components
+/// that stay strictly relative and downward (`Normal` / `CurDir`) — this
+/// also covers `..` traversal, but the reason it can't just check for
+/// `ParentDir` on the joined path (as a first version of this did) is that
+/// `PathBuf::join` silently *discards* `root` and returns its argument
+/// verbatim when that argument is itself absolute (a drive letter like
+/// `C:/Windows/win.ini` on Windows, or a path a decoded leading slash
+/// turned absolute) — such a candidate has no `..` in it at all, so that
+/// check alone let a request read any file the process could read.
 fn resolve_safe(root: &Path, url_path: &str) -> Option<PathBuf> {
     let decoded = urlencoding_decode(url_path);
-    let trimmed = decoded.trim_start_matches('/');
-    let candidate = if trimmed.is_empty() { root.join("index.html") } else { root.join(trimmed) };
+    let trimmed = decoded.trim_start_matches(['/', '\\']);
+    let relative = if trimmed.is_empty() { "index.html" } else { trimmed };
+    let rel_path = Path::new(relative);
 
-    if candidate.components().any(|c| matches!(c, Component::ParentDir)) {
+    if rel_path.components().any(|c| !matches!(c, Component::Normal(_) | Component::CurDir)) {
         return None;
     }
-    Some(candidate)
+    Some(root.join(rel_path))
 }
 
 fn urlencoding_decode(s: &str) -> String {
