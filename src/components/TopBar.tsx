@@ -1,5 +1,6 @@
 import { confirm } from "@tauri-apps/plugin-dialog";
 import { useAppState } from "../state/AppState";
+import { openPromptOptimizer } from "../engine/optimizerWindow";
 import { UpdateBadge } from "./UpdateBadge";
 import "./TopBar.css";
 
@@ -82,6 +83,13 @@ export function TopBar({
         </div>
         <button className="topbar-btn" data-active={logOpen} onClick={onToggleLog}>
           Log
+        </button>
+        <button
+          className="topbar-btn"
+          onClick={() => void openPromptOptimizer()}
+          title="Apri una finestra separata per trasformare un'idea informale in un prompt ottimizzato per ruflo"
+        >
+          ✨ Ottimizza prompt
         </button>
         <button className="topbar-btn topbar-btn-icon" title="Impostazioni / Setup" aria-label="Impostazioni" onClick={onOpenSetup}>
           ⚙

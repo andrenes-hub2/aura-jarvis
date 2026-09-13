@@ -1,11 +1,12 @@
 mod files;
+mod optimizer;
 mod secrets;
 mod setup;
 mod staticserver;
 mod terminal;
 
 use serde::Serialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter};
@@ -68,81 +69,38 @@ fn ruflo_mcp_config() -> String {
     .to_string()
 }
 
-/// Runs a Claude Code headless session for a project and streams every
-/// stream-json event back to the frontend as it arrives, on the
-/// `agent-event:<project_id>` channel. Returns the session id so the
-/// caller can pass it back as `resume_session_id` to continue the
-/// same conversation on the next prompt.
-#[tauri::command]
-async fn send_prompt(
+/// Spawns `claude` with the given extra args, rooted at `cwd`, and streams
+/// every stream-json event live on `channel` as it arrives. Returns the
+/// session id so the caller can pass it back via `--resume` next time.
+/// Shared by `send_prompt` (real projects) and the prompt-optimizer window
+/// (its own scratch session) so both get identical streaming/error handling.
+pub(crate) async fn run_claude_stream(
     app: AppHandle,
-    project_id: String,
-    project_path: String,
-    prompt: String,
-    resume_session_id: Option<String>,
-    use_ruflo: bool,
-    full_auto: bool,
+    channel: String,
+    cwd: &Path,
+    args: Vec<String>,
+    envs: Vec<(String, String)>,
 ) -> Result<String, String> {
-    eprintln!("[aura] send_prompt: bin={:?} dir={project_path}", claude_binary());
+    eprintln!("[aura] run_claude_stream: bin={:?} dir={cwd:?} args={args:?}", claude_binary());
 
     let mut cmd = Command::new(claude_binary());
-    cmd.arg("-p")
-        .arg(&prompt)
-        .arg("--output-format")
-        .arg("stream-json")
-        .arg("--verbose")
-        .arg("--forward-subagent-text")
-        .arg("--add-dir")
-        .arg(&project_path)
-        .current_dir(&project_path)
+    cmd.args(&args)
+        .envs(envs)
+        .current_dir(cwd)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-
-    if let Some(sid) = resume_session_id.filter(|s| !s.is_empty()) {
-        cmd.arg("--resume").arg(sid);
-    }
-
-    if use_ruflo {
-        cmd.arg("--mcp-config").arg(ruflo_mcp_config());
-        // ruflo's `agent_execute` tool calls the Anthropic API directly,
-        // bypassing this OAuth session entirely, so it only works if a
-        // real API key is present in the environment. It's opt-in and
-        // read from the OS keychain, never from a file or localStorage.
-        if let Some(key) = secrets::stored_api_key() {
-            cmd.env("ANTHROPIC_API_KEY", key);
-        }
-    }
-
-    // "Full auto": no permission prompts for any tool (Bash, Edit, npm
-    // installs, MCP tools included), and an explicit instruction not to
-    // pause the turn on an open design question — pick something
-    // reasonable and keep going. This is what "send a prompt and go to
-    // sleep" requires, and it is genuinely dangerous: with it on, Claude
-    // (and any ruflo sub-agents) can run any shell command, edit or
-    // delete any file under the project dir, and install packages,
-    // all without asking first. Only meant for a project directory the
-    // user already trusts completely.
-    if full_auto {
-        cmd.arg("--permission-mode").arg("bypassPermissions");
-        cmd.arg("--append-system-prompt").arg(
-            "Modalita' completamente autonoma: non fare domande di chiarimento e non fermarti in attesa di conferme o scelte dall'utente. \
-             Se una decisione e' ambigua (es. quale libreria o convenzione usare), scegli tu l'opzione piu' ragionevole, motivala brevemente in una riga e prosegui subito con l'implementazione fino al completamento del task.",
-        );
-    }
 
     let mut child = cmd
         .spawn()
         .map_err(|e| format!("Impossibile avviare Claude Code ('claude' e' nel PATH?): {e}"))?;
 
-    eprintln!("[aura] send_prompt: spawned pid={:?}", child.id());
+    eprintln!("[aura] run_claude_stream: spawned pid={:?}", child.id());
 
     let stdout = child.stdout.take().ok_or("nessuno stdout dal processo claude")?;
     let stderr = child.stderr.take().ok_or("nessuno stderr dal processo claude")?;
 
-    let channel = format!("agent-event:{project_id}");
     let mut session_id = String::new();
-
     let mut out_lines = BufReader::new(stdout).lines();
     let mut err_lines = BufReader::new(stderr).lines();
 
@@ -152,17 +110,17 @@ async fn send_prompt(
                 match line.map_err(|e| e.to_string())? {
                     Some(line) => {
                         if line.trim().is_empty() { continue; }
-                        eprintln!("[aura] send_prompt: line: {}", &line[..line.len().min(2000)]);
+                        eprintln!("[aura] run_claude_stream: line: {}", &line[..line.len().min(2000)]);
                         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
                             if let Some(sid) = value.get("session_id").and_then(|v| v.as_str()) {
                                 session_id = sid.to_string();
                             }
                             match app.emit(&channel, AgentEventPayload { event: value }) {
                                 Ok(()) => {}
-                                Err(e) => eprintln!("[aura] send_prompt: emit failed: {e}"),
+                                Err(e) => eprintln!("[aura] run_claude_stream: emit failed: {e}"),
                             }
                         } else {
-                            eprintln!("[aura] send_prompt: failed to parse line as JSON");
+                            eprintln!("[aura] run_claude_stream: failed to parse line as JSON");
                         }
                     }
                     None => break,
@@ -180,14 +138,86 @@ async fn send_prompt(
         }
     }
 
-    eprintln!("[aura] send_prompt: stdout/stderr closed, waiting on child");
+    eprintln!("[aura] run_claude_stream: stdout/stderr closed, waiting on child");
     let status = child.wait().await.map_err(|e| e.to_string())?;
-    eprintln!("[aura] send_prompt: child exited with status={status} session_id={session_id}");
+    eprintln!("[aura] run_claude_stream: child exited with status={status} session_id={session_id}");
     if !status.success() && session_id.is_empty() {
         return Err(format!("Sessione Claude Code terminata con errore ({status})"));
     }
 
     Ok(session_id)
+}
+
+/// Runs a Claude Code headless session for a project and streams every
+/// stream-json event back to the frontend as it arrives, on the
+/// `agent-event:<project_id>` channel. Returns the session id so the
+/// caller can pass it back as `resume_session_id` to continue the
+/// same conversation on the next prompt.
+#[tauri::command]
+async fn send_prompt(
+    app: AppHandle,
+    project_id: String,
+    project_path: String,
+    prompt: String,
+    resume_session_id: Option<String>,
+    use_ruflo: bool,
+    full_auto: bool,
+) -> Result<String, String> {
+    let mut args = vec![
+        "-p".to_string(),
+        prompt,
+        "--output-format".to_string(),
+        "stream-json".to_string(),
+        "--verbose".to_string(),
+        "--forward-subagent-text".to_string(),
+        "--add-dir".to_string(),
+        project_path.clone(),
+    ];
+
+    if let Some(sid) = resume_session_id.filter(|s| !s.is_empty()) {
+        args.push("--resume".to_string());
+        args.push(sid);
+    }
+
+    if use_ruflo {
+        args.push("--mcp-config".to_string());
+        args.push(ruflo_mcp_config());
+    }
+
+    // "Full auto": no permission prompts for any tool (Bash, Edit, npm
+    // installs, MCP tools included), and an explicit instruction not to
+    // pause the turn on an open design question — pick something
+    // reasonable and keep going. This is what "send a prompt and go to
+    // sleep" requires, and it is genuinely dangerous: with it on, Claude
+    // (and any ruflo sub-agents) can run any shell command, edit or
+    // delete any file under the project dir, and install packages,
+    // all without asking first. Only meant for a project directory the
+    // user already trusts completely.
+    if full_auto {
+        args.push("--permission-mode".to_string());
+        args.push("bypassPermissions".to_string());
+        args.push("--append-system-prompt".to_string());
+        args.push(
+            "Modalita' completamente autonoma: non fare domande di chiarimento e non fermarti in attesa di conferme o scelte dall'utente. \
+             Se una decisione e' ambigua (es. quale libreria o convenzione usare), scegli tu l'opzione piu' ragionevole, motivala brevemente in una riga e prosegui subito con l'implementazione fino al completamento del task."
+                .to_string(),
+        );
+    }
+
+    // ruflo's `agent_execute` tool calls the Anthropic API directly,
+    // bypassing this OAuth session entirely, so it only works if a real
+    // API key is present in the environment. It's opt-in, scoped to just
+    // this child process (never the whole app), and read from the OS
+    // keychain — never a file or localStorage.
+    let envs = if use_ruflo {
+        secrets::stored_api_key().map(|key| vec![("ANTHROPIC_API_KEY".to_string(), key)]).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+
+    let channel = format!("agent-event:{project_id}");
+    let project_path_buf = PathBuf::from(&project_path);
+    run_claude_stream(app, channel, &project_path_buf, args, envs).await
 }
 
 /// Quick health check used by the UI to show a real "connesso" / "non trovato"
@@ -230,7 +260,8 @@ pub fn run() {
             terminal::write_terminal,
             terminal::resize_terminal,
             terminal::close_terminal,
-            staticserver::start_static_server
+            staticserver::start_static_server,
+            optimizer::send_optimizer_prompt
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
