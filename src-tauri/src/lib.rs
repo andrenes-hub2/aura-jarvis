@@ -1,5 +1,6 @@
 mod files;
 mod optimizer;
+mod remote;
 mod secrets;
 mod setup;
 mod staticserver;
@@ -244,6 +245,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(terminal::TerminalRegistry::default())
         .manage(staticserver::StaticServerRegistry::default())
+        .manage(remote::RemoteRegistry::default())
         .invoke_handler(tauri::generate_handler![
             send_prompt,
             check_engine,
@@ -261,7 +263,10 @@ pub fn run() {
             terminal::resize_terminal,
             terminal::close_terminal,
             staticserver::start_static_server,
-            optimizer::send_optimizer_prompt
+            optimizer::send_optimizer_prompt,
+            remote::start_remote_view,
+            remote::stop_remote_view,
+            remote::push_remote_snapshot
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

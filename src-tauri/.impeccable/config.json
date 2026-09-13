@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "src-tauri/src/remote_view.html"
+        ],
+        "createdAt": "2026-09-13T12:30:04.583Z",
+        "reason": "matches the existing app-wide live/active status-dot glow convention used throughout AURA's main UI (sidebar, topbar, agent nodes) — intentional visual consistency, not a decorative default"
+      }
+    ]
+  }
+}

@@ -14,10 +14,12 @@ export function TopBar({
   onToggleLog,
   logOpen,
   onOpenSetup,
+  onOpenRemote,
 }: {
   onToggleLog: () => void;
   logOpen: boolean;
   onOpenSetup: () => void;
+  onOpenRemote: () => void;
 }) {
   const { activeProject, engineStatus, toggleRuflo, toggleFullAuto } = useAppState();
   const activeCount = activeProject?.agents.filter((a) => a.status === "active").length ?? 0;
@@ -90,6 +92,13 @@ export function TopBar({
           title="Apri una finestra separata per trasformare un'idea informale in un prompt ottimizzato per ruflo"
         >
           ✨ Ottimizza prompt
+        </button>
+        <button
+          className="topbar-btn"
+          onClick={onOpenRemote}
+          title="Vedi lo stato di questo progetto da un altro dispositivo sulla stessa rete"
+        >
+          📡 Remoto
         </button>
         <button className="topbar-btn topbar-btn-icon" title="Impostazioni / Setup" aria-label="Impostazioni" onClick={onOpenSetup}>
           ⚙

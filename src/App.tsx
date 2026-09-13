@@ -10,6 +10,7 @@ import { LogDrawer } from "./components/LogDrawer";
 import { AgentDetail } from "./components/AgentDetail";
 import { SetupPanel } from "./components/SetupPanel";
 import { SidePanel } from "./components/SidePanel";
+import { RemoteViewPanel } from "./components/RemoteViewPanel";
 import { needsSetup, type Diagnostics } from "./engine/setup";
 import type { SubAgent } from "./types";
 import "./App.css";
@@ -17,6 +18,7 @@ import "./App.css";
 function Shell() {
   const [logOpen, setLogOpen] = useState(false);
   const [setupOpen, setSetupOpen] = useState(false);
+  const [remoteOpen, setRemoteOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<SubAgent | null>(null);
 
   useEffect(() => {
@@ -29,7 +31,12 @@ function Shell() {
 
   return (
     <div className="app-shell">
-      <TopBar onToggleLog={() => setLogOpen((v) => !v)} logOpen={logOpen} onOpenSetup={() => setSetupOpen(true)} />
+      <TopBar
+        onToggleLog={() => setLogOpen((v) => !v)}
+        logOpen={logOpen}
+        onOpenSetup={() => setSetupOpen(true)}
+        onOpenRemote={() => setRemoteOpen(true)}
+      />
       <Sidebar />
       <div className="app-stage-wrap">
         <JarvisCore onSelectAgent={setSelectedAgent} />
@@ -39,6 +46,7 @@ function Shell() {
       </div>
       <LogDrawer open={logOpen} />
       <SetupPanel open={setupOpen} onClose={() => setSetupOpen(false)} />
+      <RemoteViewPanel open={remoteOpen} onClose={() => setRemoteOpen(false)} />
       <SidePanel />
     </div>
   );

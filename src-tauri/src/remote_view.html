@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>AURA — remoto</title>
+<style>
+  :root {
+    --bg: #05070c;
+    --panel: #0e1420;
+    --border: rgba(140, 170, 220, 0.16);
+    --text: #e8ecf5;
+    --muted: #7c8aa8;
+    --faint: #4b5773;
+    --cyan: #55e6c1;
+    --violet: #8d7bf5;
+    --amber: #e3a53d;
+    --red: #ef5169;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #pin-screen, #main-screen { display: none; padding: 24px 20px; max-width: 480px; margin: 0 auto; }
+  #pin-screen.visible, #main-screen.visible { display: block; }
+  h1 { font-size: 18px; font-weight: 800; margin: 0 0 4px; }
+  p.hint { color: var(--muted); font-size: 13px; line-height: 1.5; margin: 0 0 20px; }
+  input#pin-input {
+    width: 100%; padding: 14px; font-size: 22px; letter-spacing: 0.3em; text-align: center;
+    border-radius: 12px; border: 1px solid var(--border); background: var(--panel); color: var(--text);
+  }
+  button {
+    width: 100%; margin-top: 14px; padding: 14px; border-radius: 12px; border: none;
+    background: var(--cyan); color: #051510; font-size: 15px; font-weight: 700; cursor: pointer;
+  }
+  #pin-error { color: var(--red); font-size: 13px; margin-top: 10px; display: none; }
+
+  .header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+  .brand { font-weight: 800; letter-spacing: 0.02em; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); display: inline-block; margin-right: 6px; }
+  .status-dot.live { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+  .project-name { font-size: 20px; font-weight: 800; margin: 0 0 2px; }
+  .project-status { color: var(--muted); font-size: 13px; margin: 0 0 20px; }
+
+  .agents { display: flex; flex-direction: column; gap: 8px; margin-bottom: 24px; }
+  .agent { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel); }
+  .agent-dot { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+  .agent-dot[data-status="active"] { background: var(--cyan); box-shadow: 0 0 6px var(--cyan); }
+  .agent-dot[data-status="idle"] { background: var(--faint); }
+  .agent-dot[data-status="warning"] { background: var(--amber); }
+  .agent-dot[data-status="error"] { background: var(--red); }
+  .agent-text { flex: 1; min-width: 0; }
+  .agent-name { font-size: 13.5px; font-weight: 700; }
+  .agent-task { font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .messages { display: flex; flex-direction: column; gap: 12px; }
+  .message-author { font-size: 11px; font-weight: 700; color: var(--faint); margin-bottom: 2px; }
+  .message[data-role="assistant"] .message-author { color: var(--cyan); }
+  .message-text { font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; }
+
+  .empty { color: var(--faint); font-size: 13px; text-align: center; padding: 24px 0; }
+</style>
+</head>
+<body>
+  <div id="pin-screen">
+    <h1>AURA — vista remota</h1>
+    <p class="hint">Inserisci il PIN mostrato sullo schermo del PC dove gira AURA.</p>
+    <input id="pin-input" inputmode="numeric" maxlength="6" placeholder="------" autofocus>
+    <button id="pin-submit">Connetti</button>
+    <p id="pin-error">PIN errato, riprova.</p>
+  </div>
+
+  <div id="main-screen">
+    <div class="header">
+      <span class="brand">AURA</span>
+      <span><span class="status-dot" id="live-dot"></span><span id="live-label">connesso</span></span>
+    </div>
+    <p class="project-name" id="project-name">—</p>
+    <p class="project-status" id="project-status">In attesa di dati…</p>
+
+    <div class="agents" id="agents"></div>
+
+    <div class="messages" id="messages"></div>
+  </div>
+
+<script>
+(function () {
+  const pinScreen = document.getElementById("pin-screen");
+  const mainScreen = document.getElementById("main-screen");
+  const pinInput = document.getElementById("pin-input");
+  const pinError = document.getElementById("pin-error");
+
+  let pin = localStorage.getItem("aura-remote-pin") || "";
+
+  function showPinScreen() {
+    pinScreen.classList.add("visible");
+    mainScreen.classList.remove("visible");
+  }
+  function showMainScreen() {
+    pinScreen.classList.remove("visible");
+    mainScreen.classList.add("visible");
+  }
+
+  function roleLabel(role) {
+    const map = { coordinator: "Coordinatore", coder: "Coder", reviewer: "Reviewer", tester: "Tester", architect: "Architect", security: "Security", researcher: "Researcher" };
+    return map[role] || role;
+  }
+
+  function render(data) {
+    document.getElementById("live-dot").classList.add("live");
+    document.getElementById("live-label").textContent = "connesso";
+
+    if (!data) {
+      document.getElementById("project-name").textContent = "Nessun progetto attivo";
+      document.getElementById("project-status").textContent = "";
+      document.getElementById("agents").innerHTML = "";
+      document.getElementById("messages").innerHTML = "";
+      return;
+    }
+
+    document.getElementById("project-name").textContent = data.name || "—";
+    const activeCount = (data.agents || []).filter((a) => a.status === "active").length;
+    document.getElementById("project-status").textContent = data.running ? "in esecuzione…" : `${activeCount} agenti attivi`;
+
+    const agentsEl = document.getElementById("agents");
+    agentsEl.innerHTML = "";
+    (data.agents || []).forEach((a) => {
+      const div = document.createElement("div");
+      div.className = "agent";
+      div.innerHTML = `<span class="agent-dot" data-status="${a.status}"></span><div class="agent-text"><div class="agent-name">${a.name} · ${roleLabel(a.role)}</div><div class="agent-task">${a.task || ""}</div></div>`;
+      agentsEl.appendChild(div);
+    });
+
+    const messagesEl = document.getElementById("messages");
+    messagesEl.innerHTML = "";
+    (data.messages || []).slice(-12).forEach((m) => {
+      const div = document.createElement("div");
+      div.className = "message";
+      div.dataset.role = m.role;
+      div.innerHTML = `<div class="message-author">${m.role === "user" ? "Tu" : "Aura"}</div><div class="message-text"></div>`;
+      div.querySelector(".message-text").textContent = m.text;
+      messagesEl.appendChild(div);
+    });
+    if (!(data.agents || []).length && !(data.messages || []).length) {
+      agentsEl.innerHTML = '<p class="empty">Nessuna attività ancora in questo progetto.</p>';
+    }
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch(`/state?pin=${encodeURIComponent(pin)}`);
+      if (res.status === 401) {
+        localStorage.removeItem("aura-remote-pin");
+        pin = "";
+        pinError.style.display = "block";
+        showPinScreen();
+        return;
+      }
+      const data = await res.json();
+      showMainScreen();
+      render(data);
+    } catch {
+      document.getElementById("live-dot").classList.remove("live");
+      document.getElementById("live-label").textContent = "riconnessione…";
+    }
+  }
+
+  document.getElementById("pin-submit").addEventListener("click", () => {
+    const value = pinInput.value.trim();
+    if (!value) return;
+    pin = value;
+    localStorage.setItem("aura-remote-pin", value);
+    pinError.style.display = "none";
+    poll();
+  });
+  pinInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") document.getElementById("pin-submit").click();
+  });
+
+  if (pin) poll();
+  else showPinScreen();
+
+  setInterval(poll, 1500);
+})();
+</script>
+</body>
+</html>

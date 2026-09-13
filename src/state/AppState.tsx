@@ -119,6 +119,21 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     [projects, activeProjectId],
   );
 
+  // Mirror the visible state to the Rust side so the remote-view page (if
+  // started) always shows the same thing this window does, without Rust
+  // ever having to re-derive agent/chat state itself.
+  useEffect(() => {
+    const snapshot = activeProject
+      ? {
+          name: activeProject.name,
+          running: Boolean(activeProject.running),
+          agents: activeProject.agents,
+          messages: activeProject.messages.slice(-30),
+        }
+      : null;
+    invoke("push_remote_snapshot", { snapshot: JSON.stringify(snapshot) }).catch(() => {});
+  }, [activeProject]);
+
   async function createProject() {
     const selected = await open({ directory: true, multiple: false, title: "Scegli la cartella del progetto" });
     if (!selected || Array.isArray(selected)) return;
