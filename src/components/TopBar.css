@@ -77,6 +77,19 @@
   border: 1px solid var(--border);
 }
 
+.topbar-ruflo-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--core-cyan);
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--core-cyan) 45%, transparent);
+  white-space: nowrap;
+}
+
 .topbar-auth-dot {
   width: 6px;
   height: 6px;

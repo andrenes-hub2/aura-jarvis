@@ -1,9 +1,15 @@
-.command-bar {
+.command-bar-wrap {
   position: absolute;
   left: 50%;
   bottom: 28px;
   transform: translateX(-50%);
   width: min(560px, calc(100% - 48px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.command-bar {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -13,6 +19,69 @@
   border: 1px solid var(--border-strong);
   border-radius: 999px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
+}
+
+.command-bar-attach {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.command-bar-attach:hover:not(:disabled) {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.command-bar-attach:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.command-bar-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 8px;
+}
+
+.command-bar-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: var(--text-primary);
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  padding: 4px 6px 4px 10px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.command-bar-chip-remove {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.command-bar-chip-remove:hover {
+  color: var(--text-primary);
 }
 
 .command-bar-prompt {

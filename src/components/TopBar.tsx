@@ -21,7 +21,7 @@ export function TopBar({
   onOpenSetup: () => void;
   onOpenRemote: () => void;
 }) {
-  const { activeProject, engineStatus, toggleRuflo, toggleFullAuto } = useAppState();
+  const { activeProject, engineStatus, toggleFullAuto } = useAppState();
   const activeCount = activeProject?.agents.filter((a) => a.status === "active").length ?? 0;
 
   async function handleFullAutoClick() {
@@ -59,16 +59,12 @@ export function TopBar({
 
       <div className="topbar-actions">
         <UpdateBadge />
-        {activeProject && (
-          <button
-            className="topbar-btn"
-            data-active={Boolean(activeProject.useRuflo)}
-            onClick={() => toggleRuflo(activeProject.id)}
-            title="Carica il server MCP di ruflo in questa sessione per lo swarm di sub-agenti"
-          >
-            Ruflo
-          </button>
-        )}
+        <span
+          className="topbar-ruflo-badge"
+          title="Ruflo e' sempre attivo: ogni richiesta viene delegata ai suoi sub-agenti"
+        >
+          Ruflo attivo
+        </span>
         {activeProject && (
           <button
             className="topbar-btn topbar-btn-danger"

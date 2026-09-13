@@ -27,7 +27,6 @@ export interface Project {
   messages: ChatMessage[];
   sessionId?: string;
   running?: boolean;
-  useRuflo?: boolean;
   fullAuto?: boolean;
   /** Opaque bookkeeping for in-flight ruflo tool calls; only read/written by engine/events.ts. */
   pendingToolUse?: Record<string, unknown>;

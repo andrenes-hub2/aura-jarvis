@@ -20,11 +20,10 @@ function loadPersisted(): Project[] {
 }
 
 function persist(projects: Project[]) {
-  const slim = projects.map(({ id, name, path, useRuflo, fullAuto, sessionId, logs, messages }) => ({
+  const slim = projects.map(({ id, name, path, fullAuto, sessionId, logs, messages }) => ({
     id,
     name,
     path,
-    useRuflo,
     fullAuto,
     sessionId,
     logs: logs.slice(-HISTORY_LIMIT),
@@ -44,7 +43,6 @@ interface AppStateShape {
   engineStatus: "checking" | "connected" | "unavailable";
   selectProject: (id: string) => void;
   createProject: () => Promise<void>;
-  toggleRuflo: (projectId: string) => void;
   toggleFullAuto: (projectId: string) => void;
   sendPrompt: (text: string) => Promise<void>;
 }
@@ -140,13 +138,9 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const name = selected.split(/[\\/]/).filter(Boolean).pop() ?? selected;
     const id = `proj-${Date.now()}`;
-    const next: Project = { id, name, path: selected, agents: [], logs: [], messages: [], useRuflo: false };
+    const next: Project = { id, name, path: selected, agents: [], logs: [], messages: [] };
     setProjects((prev) => [...prev, next]);
     setActiveProjectId(id);
-  }
-
-  function toggleRuflo(projectId: string) {
-    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, useRuflo: !p.useRuflo } : p)));
   }
 
   function toggleFullAuto(projectId: string) {
@@ -177,7 +171,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         projectPath: project.path,
         prompt: text,
         resumeSessionId: project.sessionId,
-        useRuflo: Boolean(project.useRuflo),
         fullAuto: Boolean(project.fullAuto),
       });
       setProjects((prev) =>
@@ -214,7 +207,6 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     engineStatus,
     selectProject: setActiveProjectId,
     createProject,
-    toggleRuflo,
     toggleFullAuto,
     sendPrompt,
   };

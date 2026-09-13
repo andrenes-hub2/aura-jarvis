@@ -150,11 +150,31 @@ pub(crate) async fn run_claude_stream(
     Ok(session_id)
 }
 
+/// Ruflo is not an optional helper the user has to opt into per-prompt —
+/// it is the mandatory execution path. Without this, Claude tends to judge
+/// "simple" requests as not worth delegating, or claims ruflo "has no
+/// matching task type" and falls back to doing the work itself directly;
+/// this instruction forecloses both escape hatches.
+const RUFLO_MANDATORY_PROMPT: &str = "Per QUALSIASI richiesta dell'utente, indipendentemente dalla sua semplicita' o complessita' apparente, devi sempre delegarla tramite i tool mcp__ruflo__* (es. agent_spawn seguito da agent_execute, o swarm_init quando serve coordinamento tra piu' agenti). Non eseguire mai direttamente tu stesso un task che potresti in teoria fare da solo (leggere/scrivere un file, rispondere a una domanda, una piccola modifica): usa comunque ruflo per farlo eseguire da un sub-agente. Non rifiutare mai di usare ruflo dicendo che 'non ha un tipo di task corrispondente': se non esiste un tipo di agente specifico per la richiesta, spawna un agente general-purpose e descrivigli il compito in linguaggio naturale. Il tuo ruolo e' orchestrare tramite ruflo, non eseguire il lavoro in prima persona. Non prescrivere numero o ruoli specifici di agenti oltre a quanto serve per avviare la delega: lascia che sia ruflo a decidere autonomamente come comporre il proprio swarm.";
+
+/// "Full auto": no permission prompts for any tool (Bash, Edit, npm
+/// installs, MCP tools included), and an explicit instruction not to
+/// pause the turn on an open design question — pick something
+/// reasonable and keep going. This is what "send a prompt and go to
+/// sleep" requires, and it is genuinely dangerous: with it on, Claude
+/// (and any ruflo sub-agents) can run any shell command, edit or
+/// delete any file under the project dir, and install packages,
+/// all without asking first. Only meant for a project directory the
+/// user already trusts completely.
+const FULL_AUTO_PROMPT: &str = "Modalita' completamente autonoma: non fare domande di chiarimento e non fermarti in attesa di conferme o scelte dall'utente. Se una decisione e' ambigua (es. quale libreria o convenzione usare), scegli tu l'opzione piu' ragionevole, motivala brevemente in una riga e prosegui subito con l'implementazione fino al completamento del task.";
+
 /// Runs a Claude Code headless session for a project and streams every
 /// stream-json event back to the frontend as it arrives, on the
 /// `agent-event:<project_id>` channel. Returns the session id so the
 /// caller can pass it back as `resume_session_id` to continue the
-/// same conversation on the next prompt.
+/// same conversation on the next prompt. Ruflo is always wired in and
+/// always mandated by the system prompt — it is the only execution path,
+/// not a per-project toggle.
 #[tauri::command]
 async fn send_prompt(
     app: AppHandle,
@@ -162,7 +182,6 @@ async fn send_prompt(
     project_path: String,
     prompt: String,
     resume_session_id: Option<String>,
-    use_ruflo: bool,
     full_auto: bool,
 ) -> Result<String, String> {
     let mut args = vec![
@@ -174,6 +193,8 @@ async fn send_prompt(
         "--forward-subagent-text".to_string(),
         "--add-dir".to_string(),
         project_path.clone(),
+        "--mcp-config".to_string(),
+        ruflo_mcp_config(),
     ];
 
     if let Some(sid) = resume_session_id.filter(|s| !s.is_empty()) {
@@ -181,41 +202,23 @@ async fn send_prompt(
         args.push(sid);
     }
 
-    if use_ruflo {
-        args.push("--mcp-config".to_string());
-        args.push(ruflo_mcp_config());
-    }
-
-    // "Full auto": no permission prompts for any tool (Bash, Edit, npm
-    // installs, MCP tools included), and an explicit instruction not to
-    // pause the turn on an open design question — pick something
-    // reasonable and keep going. This is what "send a prompt and go to
-    // sleep" requires, and it is genuinely dangerous: with it on, Claude
-    // (and any ruflo sub-agents) can run any shell command, edit or
-    // delete any file under the project dir, and install packages,
-    // all without asking first. Only meant for a project directory the
-    // user already trusts completely.
+    let mut system_prompt = RUFLO_MANDATORY_PROMPT.to_string();
     if full_auto {
         args.push("--permission-mode".to_string());
         args.push("bypassPermissions".to_string());
-        args.push("--append-system-prompt".to_string());
-        args.push(
-            "Modalita' completamente autonoma: non fare domande di chiarimento e non fermarti in attesa di conferme o scelte dall'utente. \
-             Se una decisione e' ambigua (es. quale libreria o convenzione usare), scegli tu l'opzione piu' ragionevole, motivala brevemente in una riga e prosegui subito con l'implementazione fino al completamento del task."
-                .to_string(),
-        );
+        system_prompt.push(' ');
+        system_prompt.push_str(FULL_AUTO_PROMPT);
     }
+    args.push("--append-system-prompt".to_string());
+    args.push(system_prompt);
 
     // ruflo's `agent_execute` tool calls the Anthropic API directly,
     // bypassing this OAuth session entirely, so it only works if a real
-    // API key is present in the environment. It's opt-in, scoped to just
-    // this child process (never the whole app), and read from the OS
-    // keychain — never a file or localStorage.
-    let envs = if use_ruflo {
-        secrets::stored_api_key().map(|key| vec![("ANTHROPIC_API_KEY".to_string(), key)]).unwrap_or_default()
-    } else {
-        Vec::new()
-    };
+    // API key is present in the environment. Scoped to just this child
+    // process (never the whole app), and read from the OS keychain —
+    // never a file or localStorage. Absent, agent_execute alone will fail;
+    // agent_spawn/agent_status/etc. don't need it.
+    let envs = secrets::stored_api_key().map(|key| vec![("ANTHROPIC_API_KEY".to_string(), key)]).unwrap_or_default();
 
     let channel = format!("agent-event:{project_id}");
     let project_path_buf = PathBuf::from(&project_path);
