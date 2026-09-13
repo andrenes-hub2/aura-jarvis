@@ -174,8 +174,20 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
             // ruflo registers a tracked agent. Its real agentId is only known
             // once the result comes back, so key it by this tool_use's own
             // id for now — the tool_result handler below re-keys it.
+            //
+            // The parent edge does NOT come from Claude Code's own
+            // parent_tool_use_id: when Claude spawns a whole tree of ruflo
+            // agents (a parent plus its own sub-agents), every agent_spawn
+            // call comes from the same flat top-level turn — Claude never
+            // nests them via its native Task mechanism, so parent_tool_use_id
+            // is null for all of them regardless of which ruflo agent is
+            // conceptually whose child. ruflo instead carries that edge
+            // itself, as `config.parentAgentId` in the spawn call's own
+            // input (verified against a real spawn's logged payload), so
+            // that takes priority when present.
             const agentType: string | undefined = block.input?.agentType;
             const task: string = block.input?.task ?? "Registrato nello swarm ruflo";
+            const rufloParentId: string | undefined = block.input?.config?.parentAgentId;
             pendingToolUse[block.id] = { kind: "spawn" };
             upsertAgent(
               block.id,
@@ -186,7 +198,7 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
                 status: "idle",
                 task: truncate(task),
                 load: 0.15,
-                parentId: parentId ?? undefined,
+                parentId: rufloParentId ?? parentId ?? undefined,
               },
             );
             logs.push(makeLog("Aura", `ruflo: registra agente ${agentType ?? block.id}`));

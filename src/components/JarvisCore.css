@@ -110,19 +110,44 @@
   height: 190px;
 }
 
+/* Most of the ring is decorative (an IC has more legs than active traces);
+   only the pins an agent is actually wired to should read as live. Idle
+   ones stay dim and still so the eye isn't asked to track 26 blinking
+   dots — the active ones are the real, moving connection points. */
 .jarvis-chip-pin path {
   fill: none;
   stroke: var(--core-cyan);
-  stroke-width: 1.4;
+  stroke-width: 1.2;
   stroke-linecap: round;
-  opacity: 0.75;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--core-cyan) 60%, transparent));
+  opacity: 0.3;
 }
 
 .jarvis-chip-pin circle {
   fill: var(--core-cyan);
+  opacity: 0.4;
+  r: 2.4px;
+}
+
+.jarvis-chip-pin[data-active="true"] path {
+  stroke-width: 1.6;
   opacity: 0.85;
-  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--core-cyan) 90%, transparent));
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--core-cyan) 60%, transparent));
+}
+
+.jarvis-chip-pin[data-active="true"] circle {
+  opacity: 1;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--core-cyan) 95%, transparent));
+  animation: pin-live 1.6s ease-in-out infinite;
+}
+
+@keyframes pin-live {
+  0%,
+  100% {
+    r: 3.2px;
+  }
+  50% {
+    r: 4px;
+  }
 }
 
 /* The one authored moment lives on the connections themselves (the

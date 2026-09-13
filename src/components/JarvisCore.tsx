@@ -172,7 +172,12 @@ function seedFromId(id: string): number {
 /** Builds a radial tree layout from each agent's `parentId`, falling back
  * to treating an agent as a direct child of the core if its parent is
  * missing (pruned, or never seen) rather than dropping it. */
-function layoutAgentTree(agents: SubAgent[], cx: number, cy: number, rootRadius: number): NodePos[] {
+function layoutAgentTree(
+  agents: SubAgent[],
+  cx: number,
+  cy: number,
+  rootRadius: number,
+): { positions: NodePos[]; activePins: Set<number> } {
   const ids = new Set(agents.map((a) => a.id));
   const childrenOf = new Map<string, SubAgent[]>();
   const roots: SubAgent[] = [];
@@ -263,7 +268,7 @@ function layoutAgentTree(agents: SubAgent[], cx: number, cy: number, rootRadius:
   }
 
   place(roots, cx, cy, -Math.PI / 2, 1);
-  return positions;
+  return { positions, activePins: usedSlots };
 }
 
 function hexToRgba(hex: string, alpha: number) {
@@ -336,7 +341,7 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
   // this ring at all, they branch off their own parent's position instead.
   const radius = Math.min(MAX_RADIUS, Math.max(BASE_RADIUS, (rootCount * MIN_ARC_SPACING) / (2 * Math.PI)));
 
-  const positions: NodePos[] = layoutAgentTree(agents, cx, cy, radius);
+  const { positions, activePins } = layoutAgentTree(agents, cx, cy, radius);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -528,7 +533,7 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
               const midX = (lx + legX) / 2 + slot.ny * 4;
               const midY = (ly + legY) / 2 - slot.nx * 4;
               return (
-                <g key={i} className="jarvis-chip-pin">
+                <g key={i} className="jarvis-chip-pin" data-active={activePins.has(i)}>
                   <path d={`M${lx},${ly} Q${midX},${midY} ${legX},${legY}`} />
                   <circle cx={legX} cy={legY} r={3.2} />
                 </g>
