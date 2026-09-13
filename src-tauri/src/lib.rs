@@ -297,6 +297,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
         .manage(terminal::TerminalRegistry::default())
         .manage(staticserver::StaticServerRegistry::default())
         .manage(remote::RemoteRegistry::default())
@@ -317,6 +319,7 @@ pub fn run() {
             terminal::resize_terminal,
             terminal::close_terminal,
             staticserver::start_static_server,
+            staticserver::stop_static_server,
             optimizer::send_optimizer_prompt,
             remote::start_remote_view,
             remote::stop_remote_view,
@@ -331,6 +334,7 @@ pub fn run() {
             // leaving orphaned shell processes behind.
             if let tauri::RunEvent::Exit = event {
                 app_handle.state::<terminal::TerminalRegistry>().close_all();
+                app_handle.state::<staticserver::StaticServerRegistry>().close_all();
             }
         });
 }

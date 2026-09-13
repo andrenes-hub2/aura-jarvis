@@ -1,10 +1,28 @@
 use std::collections::HashMap;
 use std::path::{Component, Path, PathBuf};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tiny_http::{Header, Response, Server};
 
+struct Instance {
+    port: u16,
+    server: Arc<Server>,
+}
+
 #[derive(Default)]
-pub struct StaticServerRegistry(Mutex<HashMap<String, u16>>);
+pub struct StaticServerRegistry(Mutex<HashMap<String, Instance>>);
+
+impl StaticServerRegistry {
+    /// Ferma tutti i server statici in ascolto sbloccando i thread bloccati
+    /// su `incoming_requests()`, così da non lasciare thread e socket orfani
+    /// alla chiusura dell'app (mirror di `TerminalRegistry::close_all()`).
+    pub fn close_all(&self) {
+        if let Ok(mut ports) = self.0.lock() {
+            for (_, instance) in ports.drain() {
+                instance.server.unblock();
+            }
+        }
+    }
+}
 
 fn content_type(path: &Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()).unwrap_or("").to_lowercase().as_str() {
@@ -76,16 +94,17 @@ fn urlencoding_decode(s: &str) -> String {
 #[tauri::command]
 pub fn start_static_server(registry: tauri::State<StaticServerRegistry>, project_id: String, path: String) -> Result<u16, String> {
     let mut ports = registry.0.lock().map_err(|e| e.to_string())?;
-    if let Some(port) = ports.get(&project_id) {
-        return Ok(*port);
+    if let Some(instance) = ports.get(&project_id) {
+        return Ok(instance.port);
     }
 
-    let server = Server::http("127.0.0.1:0").map_err(|e| e.to_string())?;
+    let server = Arc::new(Server::http("127.0.0.1:0").map_err(|e| e.to_string())?);
     let port = server.server_addr().to_ip().ok_or("indirizzo del server non valido")?.port();
     let root = PathBuf::from(path);
 
+    let thread_server = Arc::clone(&server);
     std::thread::spawn(move || {
-        for request in server.incoming_requests() {
+        for request in thread_server.incoming_requests() {
             let target = resolve_safe(&root, request.url());
             let response = match target.and_then(|p| std::fs::read(&p).ok().map(|bytes| (p, bytes))) {
                 Some((p, bytes)) => {
@@ -98,6 +117,19 @@ pub fn start_static_server(registry: tauri::State<StaticServerRegistry>, project
         }
     });
 
-    ports.insert(project_id, port);
+    ports.insert(project_id, Instance { port, server });
     Ok(port)
+}
+
+/// Ferma il server statico associato a un progetto. Il preview panel la
+/// chiama quando l'utente naviga via da un progetto: senza questo, ogni
+/// progetto mai visto in anteprima perderebbe per sempre il suo thread in
+/// ascolto e la relativa socket. Non è un errore se non c'è nulla da fermare.
+#[tauri::command]
+pub fn stop_static_server(registry: tauri::State<StaticServerRegistry>, project_id: String) -> Result<(), String> {
+    let mut ports = registry.0.lock().map_err(|e| e.to_string())?;
+    if let Some(instance) = ports.remove(&project_id) {
+        instance.server.unblock();
+    }
+    Ok(())
 }

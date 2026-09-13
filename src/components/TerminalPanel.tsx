@@ -54,6 +54,11 @@ export function TerminalPanel({ projectId, cwd }: { projectId: string; cwd: stri
       dataSub.dispose();
       resizeObserver.disconnect();
       term.dispose();
+      // This effect re-runs (spawning a fresh PTY) whenever the active
+      // project changes, since projectId/cwd are its deps — without this,
+      // the previous project's shell was never told to close and just
+      // accumulated in TerminalRegistry for the rest of the app's life.
+      void invoke("close_terminal", { projectId });
     };
   }, [projectId, cwd]);
 

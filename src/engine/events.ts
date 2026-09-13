@@ -12,10 +12,12 @@ export function nextMessageId() {
   return `msg-${Date.now()}-${messageCounter}`;
 }
 
-// logs/messages are already capped by AppState's HISTORY_LIMIT on
-// persistence; `agents` never was, and now that ruflo runs for every
-// prompt (not just opt-in ones) a long session spawns one every request —
-// unbounded growth in memory otherwise. Idle/error/done agents get dropped
+// `agents` gets capped here; `logs`/`messages` do not — AppState's
+// HISTORY_LIMIT only trims those two when persisting to localStorage, the
+// in-memory arrays for a still-open session keep growing unbounded (a
+// separate, still-open issue). This cap is for `agents` specifically,
+// since now that ruflo runs for every prompt (not just opt-in ones) a long
+// session spawns one every request. Idle/error/done agents get dropped
 // first so a node that's actually still working never disappears.
 const AGENT_HISTORY_LIMIT = 200;
 

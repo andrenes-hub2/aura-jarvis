@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import "./WebPreview.css";
 
@@ -7,6 +7,17 @@ export function WebPreview({ projectId, projectPath }: { projectId: string; proj
   const [loadedUrl, setLoadedUrl] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [starting, setStarting] = useState(false);
+
+  useEffect(() => {
+    // A static-preview server is stateless and practically free to restart,
+    // unlike a terminal's shell session, so it's safe — and simplest — to
+    // always stop it when navigating away from this project instead of
+    // leaving it listening forever. Without this, every project ever
+    // previewed leaked its listener thread for the rest of the app's life.
+    return () => {
+      void invoke("stop_static_server", { projectId });
+    };
+  }, [projectId]);
 
   function go(url: string) {
     setDraft(url);
