@@ -5,12 +5,13 @@ import { openUrl } from "@tauri-apps/plugin-opener";
 import type { CheckResult, Diagnostics } from "../engine/setup";
 import "./SetupPanel.css";
 
-type ComponentId = "node" | "claude" | "ruflo";
+type ComponentId = "node" | "claude" | "ruflo" | "playwright";
 
-const ROWS: { id: ComponentId; label: string; installLabel: string }[] = [
-  { id: "node", label: "Node.js / npm", installLabel: "Installa Node.js" },
-  { id: "claude", label: "Claude Code", installLabel: "Installa Claude Code" },
-  { id: "ruflo", label: "Ruflo (swarm)", installLabel: "Installa Ruflo" },
+const ROWS: { id: ComponentId; label: string; installLabel: string; result: (d: Diagnostics) => CheckResult }[] = [
+  { id: "node", label: "Node.js / npm", installLabel: "Installa Node.js", result: (d) => d.node },
+  { id: "claude", label: "Claude Code", installLabel: "Installa Claude Code", result: (d) => d.claude },
+  { id: "ruflo", label: "Ruflo (swarm)", installLabel: "Installa Ruflo", result: (d) => d.ruflo },
+  { id: "playwright", label: "Playwright (test automatici)", installLabel: "Registra Playwright", result: (d) => d.playwright },
 ];
 
 export function SetupPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -132,13 +133,12 @@ export function SetupPanel({ open, onClose }: { open: boolean; onClose: () => vo
         </div>
         <p className="setup-intro">
           AURA usa Claude Code (autenticato via il tuo abbonamento, nessuna API key) e opzionalmente ruflo per lo swarm
-          di sub-agenti. Entrambi vanno installati una volta sola su questa macchina.
+          di sub-agenti, più Playwright per i test automatici. Vanno registrati una volta sola su questa macchina.
         </p>
 
         <div className="setup-rows">
           {ROWS.map((row) => {
-            const result: CheckResult | undefined =
-              row.id === "node" ? diagnostics?.node : row.id === "claude" ? diagnostics?.claude : diagnostics?.ruflo;
+            const result: CheckResult | undefined = diagnostics ? row.result(diagnostics) : undefined;
             const isRunning = running === row.id;
             return (
               <div className="setup-row" key={row.id}>
@@ -167,6 +167,14 @@ export function SetupPanel({ open, onClose }: { open: boolean; onClose: () => vo
                 {running === "login" ? "Apertura…" : "Accedi"}
               </button>
             )}
+          </div>
+
+          <div className="setup-row">
+            <span className="setup-row-status" data-ok={diagnostics?.skills.ok} />
+            <div className="setup-row-text">
+              <span className="setup-row-label">Skill extra (impeccable, design taste, …)</span>
+              <span className="setup-row-detail">{diagnostics?.skills.detail ?? "in verifica…"}</span>
+            </div>
           </div>
         </div>
 

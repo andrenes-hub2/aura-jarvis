@@ -28,6 +28,16 @@ pub struct Diagnostics {
     claude: CheckResult,
     claude_auth: CheckResult,
     ruflo: CheckResult,
+    playwright: CheckResult,
+    skills: CheckResult,
+}
+
+fn home_dir() -> Option<PathBuf> {
+    if cfg!(target_os = "windows") {
+        std::env::var("USERPROFILE").ok().map(PathBuf::from)
+    } else {
+        std::env::var("HOME").ok().map(PathBuf::from)
+    }
 }
 
 /// Resolves node.exe's own install directory on Windows via `where`
@@ -134,7 +144,44 @@ pub async fn run_diagnostics() -> Diagnostics {
     })
     .await;
 
-    Diagnostics { node, npm, claude, claude_auth, ruflo }
+    // Registered per-machine via `claude mcp add`, same mechanism as any
+    // other MCP server — genuinely needs setting up on a fresh machine,
+    // unlike the design/taste skills below.
+    let playwright = {
+        let output = Command::new(claude_binary()).args(["mcp", "list"]).output().await;
+        match output {
+            Ok(out) => {
+                let text = String::from_utf8_lossy(&out.stdout);
+                if text.lines().any(|l| l.trim_start().starts_with("playwright:")) {
+                    ok("Registrato (npx @playwright/mcp)")
+                } else {
+                    fail("Non registrato")
+                }
+            }
+            Err(e) => fail(e.to_string()),
+        }
+    };
+
+    // Skills like "impeccable" or "design-taste-frontend" live as plain
+    // files under ~/.claude/skills and ship bundled with Claude Code
+    // itself — there's no separate marketplace/plugin entry for them
+    // (`claude plugin list` reports none installed), so this is a
+    // presence check, not something with an install action.
+    let skills = match home_dir().map(|h| h.join(".claude").join("skills")) {
+        Some(dir) if dir.is_dir() => {
+            let count = std::fs::read_dir(&dir)
+                .map(|rd| rd.filter_map(|e| e.ok()).filter(|e| e.path().is_dir()).count())
+                .unwrap_or(0);
+            if count > 0 {
+                ok(format!("{count} skill disponibili (incluse con Claude Code)"))
+            } else {
+                fail("Cartella presente ma vuota")
+            }
+        }
+        _ => fail("Nessuna skill trovata — di solito arrivano con Claude Code stesso"),
+    };
+
+    Diagnostics { node, npm, claude, claude_auth, ruflo, playwright, skills }
 }
 
 #[derive(Clone, Serialize)]
@@ -176,6 +223,13 @@ pub async fn install_component(app: AppHandle, component: String) -> Result<(), 
         "ruflo" => {
             let mut c = npm_command();
             c.args(["install", "-g", "ruflo", "zod"]);
+            c
+        }
+        "playwright" => {
+            let mut c = Command::new(claude_binary());
+            // Scope "user" registers it for every project this account
+            // touches on this machine, not just the current directory.
+            c.args(["mcp", "add", "playwright", "-s", "user", "--", "npx", "-y", "@playwright/mcp@latest"]);
             c
         }
         other => return Err(format!("Componente sconosciuto: {other}")),

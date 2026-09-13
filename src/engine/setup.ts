@@ -9,6 +9,8 @@ export interface Diagnostics {
   claude: CheckResult;
   claudeAuth: CheckResult;
   ruflo: CheckResult;
+  playwright: CheckResult;
+  skills: CheckResult;
 }
 
 export function needsSetup(d: Diagnostics | null): boolean {
