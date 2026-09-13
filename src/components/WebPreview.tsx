@@ -1,10 +1,20 @@
 import { useState, type FormEvent } from "react";
+import { convertFileSrc } from "@tauri-apps/api/core";
 import "./WebPreview.css";
 
-function toFileUrl(projectPath: string, relative: string) {
+/**
+ * A plain `file://` URL inside an <iframe> is blocked by the webview's own
+ * security model when the parent page isn't itself served from `file://`
+ * (ours is served from the dev server / the `tauri://` origin in a release
+ * build) — it silently fails as a refused connection. Tauri's asset
+ * protocol is the sanctioned way around that: it serves a local path
+ * through an origin the webview already trusts, gated by the `scope`
+ * allow-list in tauri.conf.json.
+ */
+function toAssetUrl(projectPath: string, relative: string) {
   const normalized = projectPath.replace(/\\/g, "/");
   const withSlash = normalized.endsWith("/") ? normalized : `${normalized}/`;
-  return `file:///${withSlash}${relative}`;
+  return convertFileSrc(`${withSlash}${relative}`);
 }
 
 export function WebPreview({ projectPath }: { projectPath: string }) {
@@ -43,7 +53,7 @@ export function WebPreview({ projectPath }: { projectPath: string }) {
       </form>
 
       <div className="webpreview-quick">
-        <button onClick={() => go(toFileUrl(projectPath, "index.html"))}>Apri index.html</button>
+        <button onClick={() => go(toAssetUrl(projectPath, "index.html"))}>Apri index.html</button>
         <button onClick={() => go("http://localhost:3000")}>localhost:3000</button>
         <button onClick={() => go("http://localhost:5173")}>localhost:5173 (Vite)</button>
       </div>
