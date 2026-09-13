@@ -80,7 +80,13 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         prev.map((p) => {
           if (p.id !== activeProjectId) return p;
           const result = applyAgentEvent(
-            { agents: p.agents, logs: p.logs, messages: p.messages, sessionId: p.sessionId },
+            {
+              agents: p.agents,
+              logs: p.logs,
+              messages: p.messages,
+              sessionId: p.sessionId,
+              pendingToolUse: p.pendingToolUse ?? {},
+            },
             e.payload.event,
           );
           return {
@@ -89,6 +95,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
             logs: result.logs,
             messages: result.messages,
             sessionId: result.sessionId ?? p.sessionId,
+            pendingToolUse: result.pendingToolUse,
           };
         }),
       );

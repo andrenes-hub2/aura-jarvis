@@ -29,6 +29,8 @@ export interface Project {
   running?: boolean;
   useRuflo?: boolean;
   fullAuto?: boolean;
+  /** ruflo's agent_execute result only carries a tool_use id; this maps it back to the agentId it acted on. */
+  pendingToolUse?: Record<string, string>;
 }
 
 export interface LogEntry {

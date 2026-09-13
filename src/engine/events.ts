@@ -36,11 +36,29 @@ function truncate(text: string, max = 90) {
   return clean.length > max ? `${clean.slice(0, max - 1)}…` : clean;
 }
 
+/** MCP tool names arrive as `mcp__<server>__<tool>` (e.g. `mcp__ruflo__agent_spawn`). */
+function bareToolName(name: string): string {
+  const parts = name.split("__");
+  return parts[parts.length - 1] ?? name;
+}
+
 export interface EngineState {
   agents: SubAgent[];
   logs: LogEntry[];
   messages: ChatMessage[];
   sessionId?: string;
+  /**
+   * ruflo's `agent_execute` tool call carries the target `agentId` as an
+   * *argument*, but the matching `tool_result` only carries the
+   * `tool_use_id` of that call — so we remember which agent each
+   * in-flight tool_use was acting on, to resolve the result back to the
+   * right node when it arrives as a separate event.
+   */
+  pendingToolUse: Record<string, string>;
+}
+
+export function createEngineState(): EngineState {
+  return { agents: [], logs: [], messages: [], pendingToolUse: {} };
 }
 
 /** Reduces one Claude Code stream-json event into the next engine state for a project. */
@@ -48,6 +66,7 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
   const agents = [...state.agents];
   const logs = [...state.logs];
   const messages = [...state.messages];
+  const pendingToolUse = { ...state.pendingToolUse };
   let sessionId = state.sessionId;
 
   if (typeof event.session_id === "string") {
@@ -89,7 +108,10 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
         }
 
         if (block.type === "tool_use") {
+          const bare = bareToolName(block.name ?? "");
+
           if (block.name === "Task") {
+            // Claude Code's own native sub-agent mechanism.
             const subagentType: string | undefined = block.input?.subagent_type;
             const description: string = block.input?.description ?? block.input?.prompt ?? "Nuovo task";
             upsertAgent(
@@ -106,9 +128,55 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
             logs.push(
               makeLog("Aura", `Avvia sub-agente: ${subagentType ?? block.id.slice(0, 8)} — ${truncate(description, 100)}`),
             );
+          } else if (bare === "agent_spawn") {
+            // ruflo registers a tracked agent (not yet doing work).
+            const agentId: string = block.input?.agentId ?? block.id;
+            const agentType: string | undefined = block.input?.agentType;
+            const task: string = block.input?.task ?? "Registrato nello swarm ruflo";
+            upsertAgent(
+              agentId,
+              { task: truncate(task) },
+              {
+                name: agentType ? agentType.replace(/[-_]/g, " ") : agentId.slice(0, 10),
+                role: guessRole(agentType),
+                status: "idle",
+                task: truncate(task),
+                load: 0.15,
+              },
+            );
+            logs.push(makeLog("Aura", `ruflo: registra agente ${agentType ?? agentId} (${agentId})`));
+          } else if (bare === "agent_execute") {
+            // ruflo runs a tracked agent for real, via a direct Anthropic API call.
+            const agentId: string | undefined = block.input?.agentId;
+            const prompt: string = block.input?.prompt ?? "Esecuzione task";
+            if (agentId) {
+              pendingToolUse[block.id] = agentId;
+              upsertAgent(
+                agentId,
+                { status: "active", task: truncate(prompt), load: 0.75 },
+                {
+                  name: agentId.replace(/[-_]/g, " ").slice(0, 20),
+                  role: guessRole(agentId),
+                  status: "active",
+                  task: truncate(prompt),
+                  load: 0.75,
+                },
+              );
+              const label = agents.find((a) => a.id === agentId)?.name ?? agentId;
+              logs.push(makeLog(label, `Esecuzione: ${truncate(prompt, 120)}`));
+            }
+          } else if (bare === "agent_terminate") {
+            const agentId: string | undefined = block.input?.agentId;
+            if (agentId) {
+              upsertAgent(
+                agentId,
+                { status: "idle", task: "Terminato", load: 0 },
+                { name: agentId.slice(0, 10), role: "coder", status: "idle", task: "Terminato", load: 0 },
+              );
+            }
           } else {
             const label = parentId ? agents.find((a) => a.id === parentId)?.name ?? "sub-agente" : "Aura";
-            logs.push(makeLog(label, `Tool: ${block.name}`));
+            logs.push(makeLog(label, `Tool: ${bare}`));
           }
         }
       }
@@ -119,7 +187,10 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
       const blocks: any[] = event.message?.content ?? [];
       for (const block of blocks) {
         if (block.type === "tool_result" && block.tool_use_id) {
-          const idx = agents.findIndex((a) => a.id === block.tool_use_id);
+          const targetId = pendingToolUse[block.tool_use_id] ?? block.tool_use_id;
+          delete pendingToolUse[block.tool_use_id];
+
+          const idx = agents.findIndex((a) => a.id === targetId);
           if (idx !== -1) {
             const isError = Boolean(block.is_error);
             agents[idx] = {
@@ -153,5 +224,5 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
       break;
   }
 
-  return { agents, logs, messages, sessionId };
+  return { agents, logs, messages, sessionId, pendingToolUse };
 }
