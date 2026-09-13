@@ -1,0 +1,9 @@
+.terminal-panel {
+  height: 100%;
+  padding: 8px;
+  background: var(--bg);
+}
+
+.terminal-panel .xterm-viewport::-webkit-scrollbar {
+  width: 8px;
+}

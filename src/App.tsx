@@ -9,6 +9,7 @@ import { Transcript } from "./components/Transcript";
 import { LogDrawer } from "./components/LogDrawer";
 import { AgentDetail } from "./components/AgentDetail";
 import { SetupPanel } from "./components/SetupPanel";
+import { SidePanel } from "./components/SidePanel";
 import { needsSetup, type Diagnostics } from "./engine/setup";
 import type { SubAgent } from "./types";
 import "./App.css";
@@ -38,6 +39,7 @@ function Shell() {
       </div>
       <LogDrawer open={logOpen} />
       <SetupPanel open={setupOpen} onClose={() => setSetupOpen(false)} />
+      <SidePanel />
     </div>
   );
 }

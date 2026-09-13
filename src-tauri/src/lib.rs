@@ -1,5 +1,7 @@
+mod files;
 mod secrets;
 mod setup;
+mod terminal;
 
 use serde::Serialize;
 use std::path::PathBuf;
@@ -209,6 +211,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(terminal::TerminalRegistry::default())
         .invoke_handler(tauri::generate_handler![
             send_prompt,
             check_engine,
@@ -218,7 +221,13 @@ pub fn run() {
             secrets::save_api_key,
             secrets::has_api_key,
             secrets::clear_api_key,
-            secrets::test_api_key
+            secrets::test_api_key,
+            files::list_dir,
+            files::read_text_file,
+            terminal::open_terminal,
+            terminal::write_terminal,
+            terminal::resize_terminal,
+            terminal::close_terminal
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
