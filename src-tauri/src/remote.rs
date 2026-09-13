@@ -25,16 +25,38 @@ pub struct RemoteInfo {
     url: String,
 }
 
+/// If Tailscale is running, its IP (100.64.0.0/10) is reachable from any
+/// other device on the same tailnet regardless of physical network — the
+/// whole point, since a plain LAN IP only works from the same Wi-Fi. Ask
+/// the tailscale CLI itself rather than guessing from interface lists.
+fn tailscale_ip() -> Option<String> {
+    for candidate in ["tailscale", r"C:\Program Files\Tailscale\tailscale.exe"] {
+        if let Ok(output) = std::process::Command::new(candidate).args(["ip", "-4"]).output() {
+            if output.status.success() {
+                let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                if !ip.is_empty() {
+                    return Some(ip);
+                }
+            }
+        }
+    }
+    None
+}
+
 /// Finds this machine's LAN IP without any network dependency: connecting a
 /// UDP socket doesn't actually send a packet, it just makes the OS resolve
 /// which local interface/address it would use for that route.
-fn local_ip() -> String {
+fn lan_ip() -> String {
     (|| -> std::io::Result<String> {
         let socket = UdpSocket::bind("0.0.0.0:0")?;
         socket.connect("8.8.8.8:80")?;
         Ok(socket.local_addr()?.ip().to_string())
     })()
     .unwrap_or_else(|_| "127.0.0.1".to_string())
+}
+
+fn local_ip() -> String {
+    tailscale_ip().unwrap_or_else(lan_ip)
 }
 
 fn random_pin() -> String {
@@ -95,6 +117,14 @@ pub fn start_remote_view(registry: tauri::State<RemoteRegistry>) -> Result<Remot
     });
 
     let info = RemoteInfo { ip: ip.clone(), port, pin: pin.clone(), url: format!("http://{ip}:{port}/") };
+
+    // Also drop the connection info in a plain file: lets Claude Code (or
+    // the user) read the PIN/URL from outside the app when nobody can look
+    // at the AURA window's screen directly.
+    if let Ok(json) = serde_json::to_string_pretty(&info) {
+        let _ = std::fs::write(std::env::temp_dir().join("aura-remote.json"), json);
+    }
+
     *guard = Some(RemoteState { server, ip, port, pin, snapshot });
     Ok(info)
 }

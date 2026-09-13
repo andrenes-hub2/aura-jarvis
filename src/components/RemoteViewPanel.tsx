@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import QRCode from "qrcode";
 import "./RemoteViewPanel.css";
@@ -26,6 +26,13 @@ export function RemoteViewPanel({ open, onClose }: { open: boolean; onClose: () 
       setBusy(false);
     }
   }
+
+  // The remote view now auto-starts when AURA launches, so opening this
+  // panel should just show its already-running info (start_remote_view is
+  // idempotent — it returns the existing session instead of making a new one).
+  useEffect(() => {
+    if (open) void start();
+  }, [open]);
 
   async function stop() {
     setBusy(true);

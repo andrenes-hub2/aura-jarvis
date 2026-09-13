@@ -29,6 +29,13 @@ function Shell() {
       .catch(() => setSetupOpen(true));
   }, []);
 
+  // Auto-start the remote view on launch, so it's reachable (PIN readable
+  // from aura-remote.json) even when nobody can look at this window's
+  // screen to click the button first.
+  useEffect(() => {
+    invoke("start_remote_view").catch(() => {});
+  }, []);
+
   return (
     <div className="app-shell">
       <TopBar
