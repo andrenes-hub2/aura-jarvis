@@ -43,7 +43,7 @@ jobs:
             Build automatica da CI.
             - Windows: usa l'eseguibile "AURA-portable-windows.exe" (nessuna installazione richiesta).
             - macOS: apri il .dmg e trascina AURA.app dove preferisci.
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
 
       - name: Attach portable Windows exe

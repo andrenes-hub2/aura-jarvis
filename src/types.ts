@@ -28,6 +28,7 @@ export interface Project {
   sessionId?: string;
   running?: boolean;
   useRuflo?: boolean;
+  fullAuto?: boolean;
 }
 
 export interface LogEntry {

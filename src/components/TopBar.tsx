@@ -1,4 +1,6 @@
+import { confirm } from "@tauri-apps/plugin-dialog";
 import { useAppState } from "../state/AppState";
+import { UpdateBadge } from "./UpdateBadge";
 import "./TopBar.css";
 
 const ENGINE_LABEL: Record<string, string> = {
@@ -7,9 +9,29 @@ const ENGINE_LABEL: Record<string, string> = {
   unavailable: "Claude — non trovato",
 };
 
-export function TopBar({ onToggleLog, logOpen }: { onToggleLog: () => void; logOpen: boolean }) {
-  const { activeProject, engineStatus, toggleRuflo } = useAppState();
+export function TopBar({
+  onToggleLog,
+  logOpen,
+  onOpenSetup,
+}: {
+  onToggleLog: () => void;
+  logOpen: boolean;
+  onOpenSetup: () => void;
+}) {
+  const { activeProject, engineStatus, toggleRuflo, toggleFullAuto } = useAppState();
   const activeCount = activeProject?.agents.filter((a) => a.status === "active").length ?? 0;
+
+  async function handleFullAutoClick() {
+    if (!activeProject) return;
+    if (!activeProject.fullAuto) {
+      const confirmed = await confirm(
+        "Con Full Auto attivo, Claude (e ruflo) eseguirà comandi shell, modificherà o eliminerà file e installerà pacchetti in questo progetto senza chiedere conferma. Usalo solo su una cartella di cui ti fidi completamente.",
+        { title: "Attivare Full Auto?", kind: "warning" },
+      );
+      if (!confirmed) return;
+    }
+    toggleFullAuto(activeProject.id);
+  }
 
   return (
     <header className="topbar">
@@ -33,6 +55,7 @@ export function TopBar({ onToggleLog, logOpen }: { onToggleLog: () => void; logO
       )}
 
       <div className="topbar-actions">
+        <UpdateBadge />
         {activeProject && (
           <button
             className="topbar-btn"
@@ -43,6 +66,16 @@ export function TopBar({ onToggleLog, logOpen }: { onToggleLog: () => void; logO
             Ruflo
           </button>
         )}
+        {activeProject && (
+          <button
+            className="topbar-btn topbar-btn-danger"
+            data-active={Boolean(activeProject.fullAuto)}
+            onClick={handleFullAutoClick}
+            title="Nessuna conferma richiesta: comandi, modifiche a file e installazioni procedono da soli, senza fermarsi per chiedere nulla"
+          >
+            Full Auto
+          </button>
+        )}
         <div className="topbar-auth" data-status={engineStatus} title="Autenticazione via Claude Code (OAuth), nessuna API key a consumo">
           <span className="topbar-auth-dot" />
           {ENGINE_LABEL[engineStatus]}
@@ -50,7 +83,7 @@ export function TopBar({ onToggleLog, logOpen }: { onToggleLog: () => void; logO
         <button className="topbar-btn" data-active={logOpen} onClick={onToggleLog}>
           Log
         </button>
-        <button className="topbar-btn topbar-btn-icon" title="Impostazioni" aria-label="Impostazioni">
+        <button className="topbar-btn topbar-btn-icon" title="Impostazioni / Setup" aria-label="Impostazioni" onClick={onOpenSetup}>
           ⚙
         </button>
       </div>

@@ -1,3 +1,5 @@
+mod setup;
+
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -21,7 +23,7 @@ struct AgentEventPayload {
 /// (`node_modules/@anthropic-ai/claude-code/bin/claude.exe`); we target
 /// that directly so we never have to round-trip through cmd.exe (which
 /// would also mangle prompt text containing `&`, `|`, `%%`, or quotes).
-fn claude_binary() -> &'static PathBuf {
+pub(crate) fn claude_binary() -> &'static PathBuf {
     static RESOLVED: OnceLock<PathBuf> = OnceLock::new();
     RESOLVED.get_or_init(|| {
         if cfg!(target_os = "windows") {
@@ -42,12 +44,20 @@ fn claude_binary() -> &'static PathBuf {
     })
 }
 
+/// `npx -y ruflo ...` re-fetches the package into a fresh, isolated npx
+/// cache dir on every run — and at least as of ruflo 3.41.2 that ephemeral
+/// install is broken (a transitive dependency, `zod`, required by
+/// `@claude-flow/security` isn't hoisted there, so the MCP server crashes
+/// on startup with ERR_MODULE_NOT_FOUND). A normal `npm install` resolves
+/// it fine, so we require ruflo to be installed globally once
+/// (`npm install -g ruflo zod`) and use `--no-install` so npx reuses that
+/// working install instead of re-triggering the broken ephemeral path.
 fn ruflo_mcp_config() -> String {
     serde_json::json!({
         "mcpServers": {
             "ruflo": {
                 "command": "npx",
-                "args": ["-y", "ruflo", "mcp", "start"]
+                "args": ["--no-install", "ruflo", "mcp", "start"]
             }
         }
     })
@@ -67,6 +77,7 @@ async fn send_prompt(
     prompt: String,
     resume_session_id: Option<String>,
     use_ruflo: bool,
+    full_auto: bool,
 ) -> Result<String, String> {
     eprintln!("[aura] send_prompt: bin={:?} dir={project_path}", claude_binary());
 
@@ -90,6 +101,23 @@ async fn send_prompt(
 
     if use_ruflo {
         cmd.arg("--mcp-config").arg(ruflo_mcp_config());
+    }
+
+    // "Full auto": no permission prompts for any tool (Bash, Edit, npm
+    // installs, MCP tools included), and an explicit instruction not to
+    // pause the turn on an open design question — pick something
+    // reasonable and keep going. This is what "send a prompt and go to
+    // sleep" requires, and it is genuinely dangerous: with it on, Claude
+    // (and any ruflo sub-agents) can run any shell command, edit or
+    // delete any file under the project dir, and install packages,
+    // all without asking first. Only meant for a project directory the
+    // user already trusts completely.
+    if full_auto {
+        cmd.arg("--permission-mode").arg("bypassPermissions");
+        cmd.arg("--append-system-prompt").arg(
+            "Modalita' completamente autonoma: non fare domande di chiarimento e non fermarti in attesa di conferme o scelte dall'utente. \
+             Se una decisione e' ambigua (es. quale libreria o convenzione usare), scegli tu l'opzione piu' ragionevole, motivala brevemente in una riga e prosegui subito con l'implementazione fino al completamento del task.",
+        );
     }
 
     let mut child = cmd
@@ -173,7 +201,13 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![send_prompt, check_engine])
+        .invoke_handler(tauri::generate_handler![
+            send_prompt,
+            check_engine,
+            setup::run_diagnostics,
+            setup::install_component,
+            setup::open_login_terminal
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

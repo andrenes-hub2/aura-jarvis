@@ -110,3 +110,20 @@
   padding: 6px 0;
   text-align: center;
 }
+
+.topbar-btn-danger[data-active="true"] {
+  color: var(--status-error);
+  border-color: color-mix(in srgb, var(--status-error) 50%, transparent);
+  background: color-mix(in srgb, var(--status-error) 10%, transparent);
+  animation: topbar-danger-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes topbar-danger-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-error) 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--status-error) 0%, transparent);
+  }
+}

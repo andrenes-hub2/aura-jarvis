@@ -6,25 +6,29 @@ import type { Project } from "../types";
 import { applyAgentEvent } from "../engine/events";
 
 const STORAGE_KEY = "aura.projects.v1";
+const HISTORY_LIMIT = 300;
 
 function loadPersisted(): Project[] {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Project[];
-    return parsed.map((p) => ({ ...p, agents: [], logs: [], messages: [], running: false }));
+    return parsed.map((p) => ({ ...p, agents: [], logs: p.logs ?? [], messages: p.messages ?? [], running: false }));
   } catch {
     return [];
   }
 }
 
 function persist(projects: Project[]) {
-  const slim = projects.map(({ id, name, path, useRuflo, sessionId }) => ({
+  const slim = projects.map(({ id, name, path, useRuflo, fullAuto, sessionId, logs, messages }) => ({
     id,
     name,
     path,
     useRuflo,
+    fullAuto,
     sessionId,
+    logs: logs.slice(-HISTORY_LIMIT),
+    messages: messages.slice(-HISTORY_LIMIT),
   }));
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
@@ -41,6 +45,7 @@ interface AppStateShape {
   selectProject: (id: string) => void;
   createProject: () => Promise<void>;
   toggleRuflo: (projectId: string) => void;
+  toggleFullAuto: (projectId: string) => void;
   sendPrompt: (text: string) => Promise<void>;
 }
 
@@ -113,6 +118,10 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, useRuflo: !p.useRuflo } : p)));
   }
 
+  function toggleFullAuto(projectId: string) {
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, fullAuto: !p.fullAuto } : p)));
+  }
+
   async function sendPrompt(text: string) {
     const project = projects.find((p) => p.id === activeProjectIdRef.current);
     if (!project || project.running || !text.trim()) return;
@@ -138,6 +147,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         prompt: text,
         resumeSessionId: project.sessionId,
         useRuflo: Boolean(project.useRuflo),
+        fullAuto: Boolean(project.fullAuto),
       });
       setProjects((prev) =>
         prev.map((p) => (p.id === project.id ? { ...p, running: false, sessionId: sessionId || p.sessionId } : p)),
@@ -174,6 +184,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     selectProject: setActiveProjectId,
     createProject,
     toggleRuflo,
+    toggleFullAuto,
     sendPrompt,
   };
 

@@ -1,0 +1,159 @@
+import { useCallback, useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { openUrl } from "@tauri-apps/plugin-opener";
+import type { CheckResult, Diagnostics } from "../engine/setup";
+import "./SetupPanel.css";
+
+type ComponentId = "node" | "claude" | "ruflo";
+
+const ROWS: { id: ComponentId; label: string; installLabel: string }[] = [
+  { id: "node", label: "Node.js / npm", installLabel: "Installa Node.js" },
+  { id: "claude", label: "Claude Code", installLabel: "Installa Claude Code" },
+  { id: "ruflo", label: "Ruflo (swarm)", installLabel: "Installa Ruflo" },
+];
+
+export function SetupPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const [diagnostics, setDiagnostics] = useState<Diagnostics | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [running, setRunning] = useState<ComponentId | "login" | null>(null);
+  const [log, setLog] = useState<string[]>([]);
+  const [manualUrl, setManualUrl] = useState<string | null>(null);
+  const logRef = useRef<HTMLDivElement>(null);
+
+  const runDiagnostics = useCallback(async () => {
+    setChecking(true);
+    try {
+      const result = await invoke<Diagnostics>("run_diagnostics");
+      setDiagnostics(result);
+    } finally {
+      setChecking(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (open) void runDiagnostics();
+  }, [open, runDiagnostics]);
+
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen<{ step: string; line: string }>("setup-event", (e) => {
+      setLog((prev) => [...prev.slice(-80), `[${e.payload.step}] ${e.payload.line}`]);
+    }).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, []);
+
+  useEffect(() => {
+    logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
+  }, [log.length]);
+
+  async function install(id: ComponentId) {
+    setRunning(id);
+    setManualUrl(null);
+    setLog((prev) => [...prev, `— avvio installazione: ${id} —`]);
+    try {
+      await invoke("install_component", { component: id });
+      setLog((prev) => [...prev, `— ${id} installato —`]);
+    } catch (err) {
+      const message = String(err);
+      const manual = message.match(/^MANUAL:(.+)$/);
+      if (manual) setManualUrl(manual[1]);
+      else setLog((prev) => [...prev, `— errore: ${message} —`]);
+    } finally {
+      setRunning(null);
+      await runDiagnostics();
+    }
+  }
+
+  async function login() {
+    setRunning("login");
+    try {
+      await invoke("open_login_terminal");
+    } catch (err) {
+      setLog((prev) => [...prev, `— errore apertura terminale: ${String(err)} —`]);
+    } finally {
+      setRunning(null);
+    }
+  }
+
+  if (!open) return null;
+
+  return (
+    <div className="setup-overlay">
+      <div className="setup-panel">
+        <div className="setup-header">
+          <h2>Setup AURA</h2>
+          <button className="setup-close" onClick={onClose} aria-label="Chiudi">
+            ✕
+          </button>
+        </div>
+        <p className="setup-intro">
+          AURA usa Claude Code (autenticato via il tuo abbonamento, nessuna API key) e opzionalmente ruflo per lo swarm
+          di sub-agenti. Entrambi vanno installati una volta sola su questa macchina.
+        </p>
+
+        <div className="setup-rows">
+          {ROWS.map((row) => {
+            const result: CheckResult | undefined =
+              row.id === "node" ? diagnostics?.node : row.id === "claude" ? diagnostics?.claude : diagnostics?.ruflo;
+            const isRunning = running === row.id;
+            return (
+              <div className="setup-row" key={row.id}>
+                <span className="setup-row-status" data-ok={result?.ok} />
+                <div className="setup-row-text">
+                  <span className="setup-row-label">{row.label}</span>
+                  <span className="setup-row-detail">{result?.detail ?? "in verifica…"}</span>
+                </div>
+                {result && !result.ok && (
+                  <button className="setup-row-action" disabled={isRunning} onClick={() => install(row.id)}>
+                    {isRunning ? "In corso…" : row.installLabel}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+
+          <div className="setup-row">
+            <span className="setup-row-status" data-ok={diagnostics?.claudeAuth.ok} />
+            <div className="setup-row-text">
+              <span className="setup-row-label">Autenticazione Claude</span>
+              <span className="setup-row-detail">{diagnostics?.claudeAuth.detail ?? "in verifica…"}</span>
+            </div>
+            {diagnostics?.claude.ok && !diagnostics?.claudeAuth.ok && (
+              <button className="setup-row-action" disabled={running === "login"} onClick={login}>
+                {running === "login" ? "Apertura…" : "Accedi"}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {manualUrl && (
+          <div className="setup-manual">
+            <span>Installazione automatica non disponibile qui.</span>
+            <button className="setup-row-action" onClick={() => void openUrl(manualUrl)}>
+              Apri pagina di download
+            </button>
+          </div>
+        )}
+
+        {log.length > 0 && (
+          <div className="setup-log" ref={logRef}>
+            {log.map((line, i) => (
+              <div key={i} className="setup-log-line">
+                {line}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="setup-footer">
+          <button className="setup-recheck" disabled={checking} onClick={() => void runDiagnostics()}>
+            {checking ? "Verifica…" : "Ricontrolla tutto"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

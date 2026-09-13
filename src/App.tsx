@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { AppStateProvider } from "./state/AppState";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -7,16 +8,27 @@ import { CommandBar } from "./components/CommandBar";
 import { Transcript } from "./components/Transcript";
 import { LogDrawer } from "./components/LogDrawer";
 import { AgentDetail } from "./components/AgentDetail";
+import { SetupPanel } from "./components/SetupPanel";
+import { needsSetup, type Diagnostics } from "./engine/setup";
 import type { SubAgent } from "./types";
 import "./App.css";
 
 function Shell() {
   const [logOpen, setLogOpen] = useState(false);
+  const [setupOpen, setSetupOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<SubAgent | null>(null);
+
+  useEffect(() => {
+    invoke<Diagnostics>("run_diagnostics")
+      .then((result) => {
+        if (needsSetup(result)) setSetupOpen(true);
+      })
+      .catch(() => setSetupOpen(true));
+  }, []);
 
   return (
     <div className="app-shell">
-      <TopBar onToggleLog={() => setLogOpen((v) => !v)} logOpen={logOpen} />
+      <TopBar onToggleLog={() => setLogOpen((v) => !v)} logOpen={logOpen} onOpenSetup={() => setSetupOpen(true)} />
       <Sidebar />
       <div className="app-stage-wrap">
         <JarvisCore onSelectAgent={setSelectedAgent} />
@@ -25,6 +37,7 @@ function Shell() {
         {selectedAgent && <AgentDetail agent={selectedAgent} onClose={() => setSelectedAgent(null)} />}
       </div>
       <LogDrawer open={logOpen} />
+      <SetupPanel open={setupOpen} onClose={() => setSetupOpen(false)} />
     </div>
   );
 }
