@@ -24,9 +24,9 @@
 
 .topbar-word {
   font-family: var(--font-display);
-  font-weight: 700;
+  font-weight: 800;
   font-size: 17px;
-  letter-spacing: 0.18em;
+  letter-spacing: 0.02em;
   color: var(--text-primary);
 }
 

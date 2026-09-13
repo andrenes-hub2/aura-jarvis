@@ -72,6 +72,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!activeProjectId) return;
     const channel = `agent-event:${activeProjectId}`;
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
 
     listen<{ event: unknown }>(channel, (e) => {
@@ -92,10 +93,18 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         }),
       );
     }).then((fn) => {
-      unlisten = fn;
+      // React (StrictMode, in dev) can mount -> cleanup -> mount again before
+      // this promise settles; the first cleanup runs while `unlisten` is
+      // still undefined and can't call it, so without this check that first
+      // subscription leaks and every event gets applied twice.
+      if (cancelled) fn();
+      else unlisten = fn;
     });
 
-    return () => unlisten?.();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, [activeProjectId]);
 
   const activeProject = useMemo(

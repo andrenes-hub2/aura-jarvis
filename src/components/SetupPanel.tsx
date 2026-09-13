@@ -36,13 +36,18 @@ export function SetupPanel({ open, onClose }: { open: boolean; onClose: () => vo
   }, [open, runDiagnostics]);
 
   useEffect(() => {
+    let cancelled = false;
     let unlisten: (() => void) | undefined;
     listen<{ step: string; line: string }>("setup-event", (e) => {
       setLog((prev) => [...prev.slice(-80), `[${e.payload.step}] ${e.payload.line}`]);
     }).then((fn) => {
-      unlisten = fn;
+      if (cancelled) fn();
+      else unlisten = fn;
     });
-    return () => unlisten?.();
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
   }, []);
 
   useEffect(() => {

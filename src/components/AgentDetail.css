@@ -37,10 +37,8 @@
 }
 
 .agent-detail-role {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-family: var(--font-body);
+  font-size: 12px;
   color: var(--text-faint);
   margin-top: 2px;
 }

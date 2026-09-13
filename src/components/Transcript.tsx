@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppState } from "../state/AppState";
+import { InlineMarkdown } from "./InlineMarkdown";
 import "./Transcript.css";
 
 export function Transcript() {
@@ -30,7 +31,9 @@ export function Transcript() {
           {messages.map((m) => (
             <div key={m.id} className="transcript-message" data-role={m.role}>
               <span className="transcript-author">{m.role === "user" ? "Tu" : "Aura"}</span>
-              <p className="transcript-text">{m.text}</p>
+              <p className="transcript-text">
+                <InlineMarkdown text={m.text} />
+              </p>
             </div>
           ))}
           {activeProject?.running && (
