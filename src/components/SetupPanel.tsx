@@ -21,6 +21,11 @@ export function SetupPanel({ open, onClose }: { open: boolean; onClose: () => vo
   const [manualUrl, setManualUrl] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [apiKeyConfigured, setApiKeyConfigured] = useState(false);
+  const [apiKeyBusy, setApiKeyBusy] = useState<"save" | "test" | null>(null);
+  const [apiKeyResult, setApiKeyResult] = useState<{ ok: boolean; message: string } | null>(null);
+
   const runDiagnostics = useCallback(async () => {
     setChecking(true);
     try {
@@ -32,8 +37,39 @@ export function SetupPanel({ open, onClose }: { open: boolean; onClose: () => vo
   }, []);
 
   useEffect(() => {
-    if (open) void runDiagnostics();
+    if (open) {
+      void runDiagnostics();
+      invoke<boolean>("has_api_key").then(setApiKeyConfigured).catch(() => setApiKeyConfigured(false));
+    }
   }, [open, runDiagnostics]);
+
+  async function saveApiKey() {
+    setApiKeyBusy("save");
+    setApiKeyResult(null);
+    try {
+      await invoke("save_api_key", { key: apiKeyInput });
+      setApiKeyConfigured(true);
+      setApiKeyInput("");
+      setApiKeyResult({ ok: true, message: "Chiave salvata nel gestore credenziali del sistema." });
+    } catch (err) {
+      setApiKeyResult({ ok: false, message: String(err) });
+    } finally {
+      setApiKeyBusy(null);
+    }
+  }
+
+  async function testApiKey() {
+    setApiKeyBusy("test");
+    setApiKeyResult(null);
+    try {
+      const message = await invoke<string>("test_api_key", { key: apiKeyInput });
+      setApiKeyResult({ ok: true, message });
+    } catch (err) {
+      setApiKeyResult({ ok: false, message: String(err) });
+    } finally {
+      setApiKeyBusy(null);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -132,6 +168,47 @@ export function SetupPanel({ open, onClose }: { open: boolean; onClose: () => vo
               </button>
             )}
           </div>
+        </div>
+
+        <div className="setup-apikey">
+          <div className="setup-apikey-header">
+            <span className="setup-row-label">Chiave API Anthropic (opzionale)</span>
+            <span className={`setup-apikey-badge ${apiKeyConfigured ? "is-set" : ""}`}>
+              {apiKeyConfigured ? "configurata" : "non configurata"}
+            </span>
+          </div>
+          <p className="setup-apikey-hint">
+            Serve solo perché ruflo funzioni davvero in autonomia (il suo tool <code>agent_execute</code> chiama
+            l'API Anthropic direttamente, a consumo — non passa dal tuo abbonamento). Senza questa chiave, Aura
+            continua comunque a lavorare via OAuth, gratis: ruflo tiene solo traccia di swarm e task.
+          </p>
+          <div className="setup-apikey-row">
+            <input
+              type="password"
+              className="setup-apikey-input"
+              placeholder="sk-ant-…"
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              autoComplete="off"
+            />
+            <button
+              className="setup-row-action"
+              disabled={!apiKeyInput.trim() || apiKeyBusy !== null}
+              onClick={() => void testApiKey()}
+            >
+              {apiKeyBusy === "test" ? "Verifica…" : "Testa"}
+            </button>
+            <button
+              className="setup-row-action setup-row-action-primary"
+              disabled={!apiKeyInput.trim() || apiKeyBusy !== null}
+              onClick={() => void saveApiKey()}
+            >
+              {apiKeyBusy === "save" ? "Salvo…" : "Salva"}
+            </button>
+          </div>
+          {apiKeyResult && (
+            <p className={`setup-apikey-result ${apiKeyResult.ok ? "is-ok" : "is-error"}`}>{apiKeyResult.message}</p>
+          )}
         </div>
 
         {manualUrl && (

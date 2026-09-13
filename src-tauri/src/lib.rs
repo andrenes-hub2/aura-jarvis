@@ -1,3 +1,4 @@
+mod secrets;
 mod setup;
 
 use serde::Serialize;
@@ -101,6 +102,13 @@ async fn send_prompt(
 
     if use_ruflo {
         cmd.arg("--mcp-config").arg(ruflo_mcp_config());
+        // ruflo's `agent_execute` tool calls the Anthropic API directly,
+        // bypassing this OAuth session entirely, so it only works if a
+        // real API key is present in the environment. It's opt-in and
+        // read from the OS keychain, never from a file or localStorage.
+        if let Some(key) = secrets::stored_api_key() {
+            cmd.env("ANTHROPIC_API_KEY", key);
+        }
     }
 
     // "Full auto": no permission prompts for any tool (Bash, Edit, npm
@@ -206,7 +214,11 @@ pub fn run() {
             check_engine,
             setup::run_diagnostics,
             setup::install_component,
-            setup::open_login_terminal
+            setup::open_login_terminal,
+            secrets::save_api_key,
+            secrets::has_api_key,
+            secrets::clear_api_key,
+            secrets::test_api_key
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
