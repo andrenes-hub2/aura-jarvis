@@ -29,8 +29,8 @@ export interface Project {
   running?: boolean;
   useRuflo?: boolean;
   fullAuto?: boolean;
-  /** ruflo's agent_execute result only carries a tool_use id; this maps it back to the agentId it acted on. */
-  pendingToolUse?: Record<string, string>;
+  /** Opaque bookkeeping for in-flight ruflo tool calls; only read/written by engine/events.ts. */
+  pendingToolUse?: Record<string, unknown>;
 }
 
 export interface LogEntry {

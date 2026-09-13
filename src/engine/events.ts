@@ -42,19 +42,39 @@ function bareToolName(name: string): string {
   return parts[parts.length - 1] ?? name;
 }
 
+/** ruflo returns `{"agentId": "agent-..."}` as text inside the tool_result content. */
+function extractAgentId(block: any): string | undefined {
+  const content = block?.content;
+  let text: string | undefined;
+  if (typeof content === "string") text = content;
+  else if (Array.isArray(content)) text = content.find((c: any) => c?.type === "text")?.text;
+  if (!text) return undefined;
+
+  try {
+    const parsed = JSON.parse(text);
+    if (typeof parsed?.agentId === "string") return parsed.agentId;
+  } catch {
+    /* not JSON, fall through to a loose scan */
+  }
+  return text.match(/"agentId"\s*:\s*"([^"]+)"/)?.[1];
+}
+
+type PendingToolUse = { kind: "spawn" } | { kind: "execute"; agentId: string };
+
 export interface EngineState {
   agents: SubAgent[];
   logs: LogEntry[];
   messages: ChatMessage[];
   sessionId?: string;
   /**
-   * ruflo's `agent_execute` tool call carries the target `agentId` as an
-   * *argument*, but the matching `tool_result` only carries the
-   * `tool_use_id` of that call — so we remember which agent each
-   * in-flight tool_use was acting on, to resolve the result back to the
-   * right node when it arrives as a separate event.
+   * ruflo assigns a real agentId only once `agent_spawn`'s result comes
+   * back — different from the tool_use id we used as a temporary node key
+   * to show it immediately — and `agent_execute` calls reference that
+   * real id as an *argument*, while its own result only carries its own
+   * tool_use id. This tracks in-flight calls so both cases resolve back
+   * to the right node when their result arrives as a separate event.
    */
-  pendingToolUse: Record<string, string>;
+  pendingToolUse: Record<string, PendingToolUse>;
 }
 
 export function createEngineState(): EngineState {
@@ -129,28 +149,30 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
               makeLog("Aura", `Avvia sub-agente: ${subagentType ?? block.id.slice(0, 8)} — ${truncate(description, 100)}`),
             );
           } else if (bare === "agent_spawn") {
-            // ruflo registers a tracked agent (not yet doing work).
-            const agentId: string = block.input?.agentId ?? block.id;
+            // ruflo registers a tracked agent. Its real agentId is only known
+            // once the result comes back, so key it by this tool_use's own
+            // id for now — the tool_result handler below re-keys it.
             const agentType: string | undefined = block.input?.agentType;
             const task: string = block.input?.task ?? "Registrato nello swarm ruflo";
+            pendingToolUse[block.id] = { kind: "spawn" };
             upsertAgent(
-              agentId,
+              block.id,
               { task: truncate(task) },
               {
-                name: agentType ? agentType.replace(/[-_]/g, " ") : agentId.slice(0, 10),
+                name: agentType ? agentType.replace(/[-_]/g, " ") : block.id.slice(0, 10),
                 role: guessRole(agentType),
                 status: "idle",
                 task: truncate(task),
                 load: 0.15,
               },
             );
-            logs.push(makeLog("Aura", `ruflo: registra agente ${agentType ?? agentId} (${agentId})`));
+            logs.push(makeLog("Aura", `ruflo: registra agente ${agentType ?? block.id}`));
           } else if (bare === "agent_execute") {
             // ruflo runs a tracked agent for real, via a direct Anthropic API call.
             const agentId: string | undefined = block.input?.agentId;
             const prompt: string = block.input?.prompt ?? "Esecuzione task";
             if (agentId) {
-              pendingToolUse[block.id] = agentId;
+              pendingToolUse[block.id] = { kind: "execute", agentId };
               upsertAgent(
                 agentId,
                 { status: "active", task: truncate(prompt), load: 0.75 },
@@ -187,9 +209,23 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
       const blocks: any[] = event.message?.content ?? [];
       for (const block of blocks) {
         if (block.type === "tool_result" && block.tool_use_id) {
-          const targetId = pendingToolUse[block.tool_use_id] ?? block.tool_use_id;
+          const pending = pendingToolUse[block.tool_use_id];
           delete pendingToolUse[block.tool_use_id];
 
+          if (pending?.kind === "spawn") {
+            // Fold the placeholder node into the real ruflo agentId, if we
+            // got one, so the next agent_execute call (which references
+            // that real id) updates this same node instead of creating a
+            // visually duplicate one.
+            const realId = extractAgentId(block);
+            const idx = agents.findIndex((a) => a.id === block.tool_use_id);
+            if (idx !== -1 && realId && realId !== block.tool_use_id) {
+              agents[idx] = { ...agents[idx], id: realId };
+            }
+            continue;
+          }
+
+          const targetId = pending?.kind === "execute" ? pending.agentId : block.tool_use_id;
           const idx = agents.findIndex((a) => a.id === targetId);
           if (idx !== -1) {
             const isError = Boolean(block.is_error);

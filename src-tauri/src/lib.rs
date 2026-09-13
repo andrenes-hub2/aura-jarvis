@@ -149,7 +149,7 @@ async fn send_prompt(
                 match line.map_err(|e| e.to_string())? {
                     Some(line) => {
                         if line.trim().is_empty() { continue; }
-                        eprintln!("[aura] send_prompt: line: {}", &line[..line.len().min(200)]);
+                        eprintln!("[aura] send_prompt: line: {}", &line[..line.len().min(2000)]);
                         if let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) {
                             if let Some(sid) = value.get("session_id").and_then(|v| v.as_str()) {
                                 session_id = sid.to_string();

@@ -3,7 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
 import type { Project } from "../types";
-import { applyAgentEvent } from "../engine/events";
+import { applyAgentEvent, type EngineState } from "../engine/events";
 
 const STORAGE_KEY = "aura.projects.v1";
 const HISTORY_LIMIT = 300;
@@ -85,7 +85,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
               logs: p.logs,
               messages: p.messages,
               sessionId: p.sessionId,
-              pendingToolUse: p.pendingToolUse ?? {},
+              pendingToolUse: (p.pendingToolUse as EngineState["pendingToolUse"]) ?? {},
             },
             e.payload.event,
           );
