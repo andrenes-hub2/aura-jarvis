@@ -13,19 +13,31 @@ function loadPersisted(): Project[] {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Project[];
-    return parsed.map((p) => ({ ...p, agents: [], logs: p.logs ?? [], messages: p.messages ?? [], running: false }));
+    // Agents themselves persist (so the roster survives a restart instead of
+    // vanishing), but any "active" status is stale by definition — the
+    // Claude Code process that was driving it is long gone once the app
+    // restarts — so it's demoted to idle rather than shown as still working.
+    return parsed.map((p) => ({
+      ...p,
+      agents: (p.agents ?? []).map((a) => (a.status === "active" ? { ...a, status: "idle", load: 0 } : a)),
+      logs: p.logs ?? [],
+      messages: p.messages ?? [],
+      running: false,
+    }));
   } catch {
     return [];
   }
 }
 
 function persist(projects: Project[]) {
-  const slim = projects.map(({ id, name, path, fullAuto, sessionId, logs, messages }) => ({
+  const slim = projects.map(({ id, name, path, fullAuto, coreModel, sessionId, agents, logs, messages }) => ({
     id,
     name,
     path,
     fullAuto,
+    coreModel,
     sessionId,
+    agents,
     logs: logs.slice(-HISTORY_LIMIT),
     messages: messages.slice(-HISTORY_LIMIT),
   }));
@@ -44,6 +56,7 @@ interface AppStateShape {
   selectProject: (id: string) => void;
   createProject: () => Promise<void>;
   toggleFullAuto: (projectId: string) => void;
+  setCoreModel: (projectId: string, model: string) => void;
   sendPrompt: (text: string, attachmentPaths?: string[]) => Promise<void>;
 }
 
@@ -149,13 +162,17 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const name = selected.split(/[\\/]/).filter(Boolean).pop() ?? selected;
     const id = `proj-${Date.now()}`;
-    const next: Project = { id, name, path: selected, agents: [], logs: [], messages: [] };
+    const next: Project = { id, name, path: selected, agents: [], logs: [], messages: [], coreModel: "sonnet" };
     setProjects((prev) => [...prev, next]);
     setActiveProjectId(id);
   }
 
   function toggleFullAuto(projectId: string) {
     setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, fullAuto: !p.fullAuto } : p)));
+  }
+
+  function setCoreModel(projectId: string, model: string) {
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, coreModel: model } : p)));
   }
 
   async function sendPrompt(text: string, attachmentPaths: string[] = []) {
@@ -184,6 +201,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         resumeSessionId: project.sessionId,
         fullAuto: Boolean(project.fullAuto),
         attachmentPaths,
+        coreModel: project.coreModel || "sonnet",
       });
       setProjects((prev) =>
         prev.map((p) => (p.id === project.id ? { ...p, running: false, sessionId: sessionId || p.sessionId } : p)),
@@ -220,6 +238,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     selectProject: setActiveProjectId,
     createProject,
     toggleFullAuto,
+    setCoreModel,
     sendPrompt,
   };
 

@@ -3,12 +3,69 @@
   inset: 0;
   overflow: hidden;
   background: radial-gradient(ellipse at center, #0a1120 0%, #05070c 68%);
+  cursor: grab;
+  touch-action: none;
+}
+
+.jarvis-stage[data-dragging="true"] {
+  cursor: grabbing;
+}
+
+.jarvis-world {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: 0 0;
+  will-change: transform;
 }
 
 .jarvis-canvas {
   position: absolute;
   inset: 0;
   pointer-events: none;
+}
+
+.jarvis-view-controls {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+.jarvis-view-controls button {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.jarvis-view-controls button:hover {
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.jarvis-view-count {
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-faint);
+  padding: 0 4px;
+  white-space: nowrap;
 }
 
 .jarvis-core-node {

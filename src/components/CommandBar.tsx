@@ -3,8 +3,14 @@ import { open } from "@tauri-apps/plugin-dialog";
 import { useAppState } from "../state/AppState";
 import "./CommandBar.css";
 
+const MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "haiku", label: "Haiku 4.5 — veloce" },
+  { value: "sonnet", label: "Sonnet 5 — bilanciato" },
+  { value: "opus", label: "Opus 5 — massima capacità" },
+];
+
 export function CommandBar() {
-  const { activeProject, sendPrompt } = useAppState();
+  const { activeProject, setCoreModel, sendPrompt } = useAppState();
   const [value, setValue] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
 
@@ -80,6 +86,23 @@ export function CommandBar() {
         <button className="command-bar-send" type="submit" aria-label="Invia" disabled={disabled}>
           ↵
         </button>
+      </div>
+
+      <div className="command-bar-modelrow">
+        <span className="command-bar-model-label">Cervello</span>
+        <select
+          className="command-bar-model-select"
+          value={activeProject?.coreModel ?? "sonnet"}
+          onChange={(e) => activeProject && setCoreModel(activeProject.id, e.target.value)}
+          disabled={!activeProject}
+          title="Modello Claude usato come orchestratore per questo progetto"
+        >
+          {MODEL_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
       </div>
     </form>
   );

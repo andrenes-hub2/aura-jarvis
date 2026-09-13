@@ -28,6 +28,8 @@ export interface Project {
   sessionId?: string;
   running?: boolean;
   fullAuto?: boolean;
+  /** Which Claude model runs as the orchestrator "core" for this project's prompts (alias: haiku/sonnet/opus). */
+  coreModel?: string;
   /** Opaque bookkeeping for in-flight ruflo tool calls; only read/written by engine/events.ts. */
   pendingToolUse?: Record<string, unknown>;
 }

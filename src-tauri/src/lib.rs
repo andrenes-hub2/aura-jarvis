@@ -196,6 +196,7 @@ async fn send_prompt(
     resume_session_id: Option<String>,
     full_auto: bool,
     attachment_paths: Vec<String>,
+    core_model: Option<String>,
 ) -> Result<String, String> {
     let mut args = vec![
         "-p".to_string(),
@@ -209,6 +210,14 @@ async fn send_prompt(
         "--mcp-config".to_string(),
         ruflo_mcp_config(),
     ];
+
+    // Lets the UI's model dropdown pick which model runs as the orchestrator
+    // "core" (haiku/sonnet/opus) for this specific project, instead of
+    // always falling back to whatever `claude`'s own default is.
+    if let Some(model) = core_model.filter(|m| !m.is_empty()) {
+        args.push("--model".to_string());
+        args.push(model);
+    }
 
     // The attach picker lets the user pick a file from anywhere, not just
     // inside the project — Claude can only read paths under a directory
