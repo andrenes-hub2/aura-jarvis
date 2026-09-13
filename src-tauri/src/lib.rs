@@ -1,18 +1,19 @@
 mod files;
 mod optimizer;
+mod procutil;
 mod remote;
 mod secrets;
 mod setup;
 mod staticserver;
 mod terminal;
 
+use procutil::tokio_command;
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use std::sync::OnceLock;
 use tauri::{AppHandle, Emitter};
 use tokio::io::{AsyncBufReadExt, BufReader};
-use tokio::process::Command;
 
 #[derive(Clone, Serialize)]
 struct AgentEventPayload {
@@ -24,7 +25,7 @@ struct AgentEventPayload {
 /// On Windows, global npm packages install as `claude.cmd` / `claude.ps1`
 /// shims, not a plain `claude.exe` on PATH — and `std::process::Command`
 /// cannot launch a `.cmd` file directly (it isn't a native PE image), so
-/// `Command::new("claude")` silently fails to spawn. The npm shim's actual
+/// `tokio_command("claude")` silently fails to spawn. The npm shim's actual
 /// payload is a real native binary one level down
 /// (`node_modules/@anthropic-ai/claude-code/bin/claude.exe`); we target
 /// that directly so we never have to round-trip through cmd.exe (which
@@ -84,7 +85,7 @@ pub(crate) async fn run_claude_stream(
 ) -> Result<String, String> {
     eprintln!("[aura] run_claude_stream: bin={:?} dir={cwd:?} args={args:?}", claude_binary());
 
-    let mut cmd = Command::new(claude_binary());
+    let mut cmd = tokio_command(claude_binary());
     cmd.args(&args)
         .envs(envs)
         .current_dir(cwd)
@@ -225,7 +226,7 @@ async fn send_prompt(
 /// status instead of assuming Claude Code is always available.
 #[tauri::command]
 async fn check_engine() -> Result<String, String> {
-    let output = Command::new(claude_binary())
+    let output = tokio_command(claude_binary())
         .arg("--version")
         .output()
         .await

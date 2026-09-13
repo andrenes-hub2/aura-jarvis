@@ -1,4 +1,5 @@
 use crate::claude_binary;
+use crate::procutil::{std_command, tokio_command};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::process::Stdio;
@@ -49,7 +50,7 @@ fn home_dir() -> Option<PathBuf> {
 fn node_dir() -> Option<PathBuf> {
     static DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
     DIR.get_or_init(|| {
-        let output = std::process::Command::new("where").arg("node").output().ok()?;
+        let output = std_command("where").arg("node").output().ok()?;
         if !output.status.success() {
             return None;
         }
@@ -65,13 +66,13 @@ fn node_cli_command(entry_dir: &str, entry_file: &str, posix_fallback: &str) -> 
         if let Some(dir) = node_dir() {
             let script = dir.join("node_modules").join(entry_dir).join("bin").join(entry_file);
             if script.exists() {
-                let mut c = Command::new("node");
+                let mut c = tokio_command("node");
                 c.arg(script);
                 return c;
             }
         }
     }
-    Command::new(posix_fallback)
+    tokio_command(posix_fallback)
 }
 
 fn npm_command() -> Command {
@@ -79,7 +80,7 @@ fn npm_command() -> Command {
 }
 
 fn has_command(bin: &str) -> bool {
-    std::process::Command::new(bin)
+    std_command(bin)
         .arg("--version")
         .output()
         .map(|o| o.status.success())
@@ -99,7 +100,7 @@ async fn run_check(mut cmd: Command) -> CheckResult {
 #[tauri::command]
 pub async fn run_diagnostics() -> Diagnostics {
     let node = run_check({
-        let mut c = Command::new("node");
+        let mut c = tokio_command("node");
         c.arg("--version");
         c
     })
@@ -113,14 +114,14 @@ pub async fn run_diagnostics() -> Diagnostics {
     .await;
 
     let claude = run_check({
-        let mut c = Command::new(claude_binary());
+        let mut c = tokio_command(claude_binary());
         c.arg("--version");
         c
     })
     .await;
 
     let claude_auth = {
-        let output = Command::new(claude_binary()).arg("auth").arg("status").output().await;
+        let output = tokio_command(claude_binary()).arg("auth").arg("status").output().await;
         match output {
             Ok(out) => {
                 let text = String::from_utf8_lossy(&out.stdout);
@@ -148,7 +149,7 @@ pub async fn run_diagnostics() -> Diagnostics {
     // other MCP server — genuinely needs setting up on a fresh machine,
     // unlike the design/taste skills below.
     let playwright = {
-        let output = Command::new(claude_binary()).args(["mcp", "list"]).output().await;
+        let output = tokio_command(claude_binary()).args(["mcp", "list"]).output().await;
         match output {
             Ok(out) => {
                 let text = String::from_utf8_lossy(&out.stdout);
@@ -197,7 +198,7 @@ struct SetupEventPayload {
 pub async fn install_component(app: AppHandle, component: String) -> Result<(), String> {
     let mut cmd = match component.as_str() {
         "node" if cfg!(target_os = "windows") => {
-            let mut c = Command::new("winget");
+            let mut c = tokio_command("winget");
             c.args([
                 "install",
                 "--id",
@@ -210,7 +211,7 @@ pub async fn install_component(app: AppHandle, component: String) -> Result<(), 
             c
         }
         "node" if cfg!(target_os = "macos") && has_command("brew") => {
-            let mut c = Command::new("brew");
+            let mut c = tokio_command("brew");
             c.args(["install", "node"]);
             c
         }
@@ -226,7 +227,7 @@ pub async fn install_component(app: AppHandle, component: String) -> Result<(), 
             c
         }
         "playwright" => {
-            let mut c = Command::new(claude_binary());
+            let mut c = tokio_command(claude_binary());
             // Scope "user" registers it for every project this account
             // touches on this machine, not just the current directory.
             c.args(["mcp", "add", "playwright", "-s", "user", "--", "npx", "-y", "@playwright/mcp@latest"]);

@@ -1,3 +1,4 @@
+use crate::procutil::std_command;
 use serde::Serialize;
 use std::net::UdpSocket;
 use std::sync::{Arc, Mutex};
@@ -31,7 +32,7 @@ pub struct RemoteInfo {
 /// the tailscale CLI itself rather than guessing from interface lists.
 fn tailscale_ip() -> Option<String> {
     for candidate in ["tailscale", r"C:\Program Files\Tailscale\tailscale.exe"] {
-        if let Ok(output) = std::process::Command::new(candidate).args(["ip", "-4"]).output() {
+        if let Ok(output) = std_command(candidate).args(["ip", "-4"]).output() {
             if output.status.success() {
                 let ip = String::from_utf8_lossy(&output.stdout).trim().to_string();
                 if !ip.is_empty() {
