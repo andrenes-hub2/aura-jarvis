@@ -41,15 +41,28 @@ fn home_dir() -> Option<PathBuf> {
     }
 }
 
-/// Resolves node.exe's own install directory on Windows via `where`
-/// (a real system .exe, never a shim) so we can run npm/npx's *.js entry
-/// points through `node` directly. Same root cause as `claude_binary`:
-/// npm ships `npm.cmd` / `npx.cmd` on Windows, and a bare
+/// Resolves node.exe's own install directory, so npm/npx's *.js entry
+/// points can be run through `node` directly. Same root cause as
+/// `claude_binary`: npm ships `npm.cmd` / `npx.cmd` on Windows, and a bare
 /// `Command::new("npm")` cannot execute those — only `npm`/`npm-cli.js`,
 /// which are not native PE images either.
+///
+/// Tries the standard install locations first rather than `where node`:
+/// a double-clicked exe inherits Explorer's environment, which only
+/// reflects PATH changes made *before* Explorer itself last started — a
+/// PATH entry added later in the same Windows session (by an installer,
+/// or by this app's own Setup panel) is invisible to it until the next
+/// logoff/reboot, even though a freshly-opened terminal sees it fine.
 fn node_dir() -> Option<PathBuf> {
     static DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
     DIR.get_or_init(|| {
+        for fixed in [r"C:\Program Files\nodejs", r"C:\Program Files (x86)\nodejs"] {
+            let candidate = PathBuf::from(fixed);
+            if candidate.join("node.exe").exists() {
+                return Some(candidate);
+            }
+        }
+
         let output = std_command("where").arg("node").output().ok()?;
         if !output.status.success() {
             return None;
@@ -61,12 +74,22 @@ fn node_dir() -> Option<PathBuf> {
     .clone()
 }
 
+/// Same fixed-path-first reasoning as `node_dir`: a bare `"node"` also
+/// depends on the caller's inherited PATH, which a double-clicked exe may
+/// not have picked up yet.
+fn node_binary() -> PathBuf {
+    node_dir()
+        .map(|dir| dir.join("node.exe"))
+        .filter(|p| p.exists())
+        .unwrap_or_else(|| PathBuf::from("node"))
+}
+
 fn node_cli_command(entry_dir: &str, entry_file: &str, posix_fallback: &str) -> Command {
     if cfg!(target_os = "windows") {
         if let Some(dir) = node_dir() {
             let script = dir.join("node_modules").join(entry_dir).join("bin").join(entry_file);
             if script.exists() {
-                let mut c = tokio_command("node");
+                let mut c = tokio_command(node_binary());
                 c.arg(script);
                 return c;
             }
@@ -100,7 +123,7 @@ async fn run_check(mut cmd: Command) -> CheckResult {
 #[tauri::command]
 pub async fn run_diagnostics() -> Diagnostics {
     let node = run_check({
-        let mut c = tokio_command("node");
+        let mut c = tokio_command(node_binary());
         c.arg("--version");
         c
     })

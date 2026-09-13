@@ -87,18 +87,20 @@ export function TopBar({
           Log
         </button>
         <button
-          className="topbar-btn"
+          className="topbar-btn topbar-btn-icon"
           onClick={() => void openPromptOptimizer()}
-          title="Apri una finestra separata per trasformare un'idea informale in un prompt ottimizzato per ruflo"
+          title="Ottimizza prompt per ruflo — apre una finestra separata per trasformare un'idea informale in un prompt ottimizzato"
+          aria-label="Ottimizza prompt"
         >
-          ✨ Ottimizza prompt
+          ✨
         </button>
         <button
-          className="topbar-btn"
+          className="topbar-btn topbar-btn-icon"
           onClick={onOpenRemote}
-          title="Vedi lo stato di questo progetto da un altro dispositivo sulla stessa rete"
+          title="Vista remota — vedi lo stato di questo progetto da un altro dispositivo"
+          aria-label="Vista remota"
         >
-          📡 Remoto
+          📡
         </button>
         <button className="topbar-btn topbar-btn-icon" title="Impostazioni / Setup" aria-label="Impostazioni" onClick={onOpenSetup}>
           ⚙
