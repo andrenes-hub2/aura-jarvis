@@ -7,12 +7,35 @@
   max-height: min(46vh, 420px);
   display: flex;
   flex-direction: column;
+  align-items: center;
   justify-content: flex-end;
+  gap: 8px;
   pointer-events: none;
+}
+
+.transcript-toggle {
+  pointer-events: auto;
+  flex-shrink: 0;
+  padding: 5px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+}
+
+.transcript-toggle:hover {
+  color: var(--text-primary);
+  border-color: var(--core-cyan);
 }
 
 .transcript-body {
   pointer-events: auto;
+  width: 100%;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
