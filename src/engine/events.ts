@@ -148,11 +148,18 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
         if (block.type === "tool_use") {
           const bare = bareToolName(block.name ?? "");
 
-          if (block.name === "Task") {
-            // Claude Code's own native sub-agent mechanism. `parentId` here
-            // is the *calling* agent's id (null if the top-level session
-            // itself made the call) — exactly the hierarchy edge needed to
-            // draw this node under its real parent instead of the core.
+          if (block.name === "Task" || block.name === "Agent") {
+            // Claude Code's own native sub-agent mechanism — the tool is
+            // called "Agent" in every real session logged so far ("Task"
+            // has never once appeared), but "Task" is kept too in case an
+            // older/other Claude Code build still uses that name. Getting
+            // this name wrong isn't a cosmetic miss: every branch below
+            // depends on this check matching, so this whole path was silently
+            // dead code (no node ever created for a native sub-agent) until
+            // it did. `parentId` here is the *calling* agent's id (null if
+            // the top-level session itself made the call) — exactly the
+            // hierarchy edge needed to draw this node under its real parent
+            // instead of the core.
             //
             // The node's name prefers the caller's own `description` (the
             // short label an orchestrating agent writes for *this specific*
