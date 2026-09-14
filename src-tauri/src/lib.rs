@@ -184,9 +184,13 @@ const FULL_AUTO_PROMPT: &str = "Modalita' completamente autonoma: non fare doman
 /// stream-json event back to the frontend as it arrives, on the
 /// `agent-event:<project_id>` channel. Returns the session id so the
 /// caller can pass it back as `resume_session_id` to continue the
-/// same conversation on the next prompt. Ruflo is always wired in and
-/// always mandated by the system prompt — it is the only execution path,
-/// not a per-project toggle.
+/// same conversation on the next prompt.
+///
+/// Ruflo is a per-project toggle again, not a mandatory path: forcing
+/// every request through it (even trivial ones) meant `agent_execute`
+/// hit the pay-per-token Anthropic API on every single prompt, burning
+/// real money for work plain Claude Code (OAuth subscription, no extra
+/// billing) could often do alone via its own native sub-agents.
 #[tauri::command]
 async fn send_prompt(
     app: AppHandle,
@@ -194,6 +198,7 @@ async fn send_prompt(
     project_path: String,
     prompt: String,
     resume_session_id: Option<String>,
+    use_ruflo: bool,
     full_auto: bool,
     attachment_paths: Vec<String>,
     core_model: Option<String>,
@@ -207,9 +212,12 @@ async fn send_prompt(
         "--forward-subagent-text".to_string(),
         "--add-dir".to_string(),
         project_path.clone(),
-        "--mcp-config".to_string(),
-        ruflo_mcp_config(),
     ];
+
+    if use_ruflo {
+        args.push("--mcp-config".to_string());
+        args.push(ruflo_mcp_config());
+    }
 
     // Lets the UI's model dropdown pick which model runs as the orchestrator
     // "core" (haiku/sonnet/opus) for this specific project, instead of
@@ -247,7 +255,11 @@ async fn send_prompt(
         args.push(sid);
     }
 
-    let mut system_prompt = format!("{RUFLO_MANDATORY_PROMPT} {DIRECTORY_HYGIENE_PROMPT}");
+    let mut system_prompt = DIRECTORY_HYGIENE_PROMPT.to_string();
+    if use_ruflo {
+        system_prompt.push(' ');
+        system_prompt.push_str(RUFLO_MANDATORY_PROMPT);
+    }
     if full_auto {
         args.push("--permission-mode".to_string());
         args.push("bypassPermissions".to_string());
@@ -260,10 +272,16 @@ async fn send_prompt(
     // ruflo's `agent_execute` tool calls the Anthropic API directly,
     // bypassing this OAuth session entirely, so it only works if a real
     // API key is present in the environment. Scoped to just this child
-    // process (never the whole app), and read from the OS keychain —
-    // never a file or localStorage. Absent, agent_execute alone will fail;
-    // agent_spawn/agent_status/etc. don't need it.
-    let mut envs = secrets::stored_api_key().map(|key| vec![("ANTHROPIC_API_KEY".to_string(), key)]).unwrap_or_default();
+    // process (never the whole app), read from the OS keychain — never a
+    // file or localStorage — and only fetched/injected when ruflo is
+    // actually enabled for this prompt, so a plain OAuth-only run never
+    // touches the keychain or risks leaking the key into an env it has no
+    // use for.
+    let mut envs = if use_ruflo {
+        secrets::stored_api_key().map(|key| vec![("ANTHROPIC_API_KEY".to_string(), key)]).unwrap_or_default()
+    } else {
+        Vec::new()
+    };
 
     // Claude Code and ruflo's MCP server both run on Node/V8, which caps
     // its own heap well below what's physically installed (a default

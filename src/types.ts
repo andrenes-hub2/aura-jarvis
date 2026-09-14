@@ -29,6 +29,7 @@ export interface Project {
   messages: ChatMessage[];
   sessionId?: string;
   running?: boolean;
+  useRuflo?: boolean;
   fullAuto?: boolean;
   /** Which Claude model runs as the orchestrator "core" for this project's prompts (alias: haiku/sonnet/opus). */
   coreModel?: string;

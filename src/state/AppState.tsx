@@ -30,10 +30,11 @@ function loadPersisted(): Project[] {
 }
 
 function persist(projects: Project[]) {
-  const slim = projects.map(({ id, name, path, fullAuto, coreModel, sessionId, agents, logs, messages }) => ({
+  const slim = projects.map(({ id, name, path, useRuflo, fullAuto, coreModel, sessionId, agents, logs, messages }) => ({
     id,
     name,
     path,
+    useRuflo,
     fullAuto,
     coreModel,
     sessionId,
@@ -55,6 +56,7 @@ interface AppStateShape {
   engineStatus: "checking" | "connected" | "unavailable";
   selectProject: (id: string) => void;
   createProject: () => Promise<void>;
+  toggleRuflo: (projectId: string) => void;
   toggleFullAuto: (projectId: string) => void;
   setCoreModel: (projectId: string, model: string) => void;
   sendPrompt: (text: string, attachmentPaths?: string[]) => Promise<void>;
@@ -162,9 +164,22 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
 
     const name = selected.split(/[\\/]/).filter(Boolean).pop() ?? selected;
     const id = `proj-${Date.now()}`;
-    const next: Project = { id, name, path: selected, agents: [], logs: [], messages: [], coreModel: "sonnet" };
+    const next: Project = {
+      id,
+      name,
+      path: selected,
+      agents: [],
+      logs: [],
+      messages: [],
+      coreModel: "sonnet",
+      useRuflo: false,
+    };
     setProjects((prev) => [...prev, next]);
     setActiveProjectId(id);
+  }
+
+  function toggleRuflo(projectId: string) {
+    setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, useRuflo: !p.useRuflo } : p)));
   }
 
   function toggleFullAuto(projectId: string) {
@@ -199,6 +214,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
         projectPath: project.path,
         prompt: text,
         resumeSessionId: project.sessionId,
+        useRuflo: Boolean(project.useRuflo),
         fullAuto: Boolean(project.fullAuto),
         attachmentPaths,
         coreModel: project.coreModel || "sonnet",
@@ -237,6 +253,7 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     engineStatus,
     selectProject: setActiveProjectId,
     createProject,
+    toggleRuflo,
     toggleFullAuto,
     setCoreModel,
     sendPrompt,
