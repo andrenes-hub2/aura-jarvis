@@ -205,8 +205,12 @@ function layoutAgentTree(
       // Roots still fan freely around the whole core, one per pin.
       list.forEach((agent, i) => {
         const angle = -Math.PI / 2 + (i / n) * Math.PI * 2;
-        const x = originX + rootRadius * Math.cos(angle);
-        const y = originY + rootRadius * Math.sin(angle);
+        // A manual drag override replaces the automatic point but the
+        // node's own subtree still grows from *this* position, so a
+        // dragged parent's children keep following it in every future
+        // layout pass, not just visually during the drag gesture itself.
+        const x = agent.manualX ?? originX + rootRadius * Math.cos(angle);
+        const y = agent.manualY ?? originY + rootRadius * Math.sin(angle);
 
         let parentX = originX;
         let parentY = originY;
@@ -247,8 +251,8 @@ function layoutAgentTree(
 
     list.forEach((agent, i) => {
       const offset = (i - (n - 1) / 2) * gap;
-      const x = rowX + perpX * offset;
-      const y = rowY + perpY * offset;
+      const x = agent.manualX ?? rowX + perpX * offset;
+      const y = agent.manualY ?? rowY + perpY * offset;
 
       positions.push({
         agent,
@@ -279,6 +283,30 @@ function hexToRgba(hex: string, alpha: number) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+/** Every agent whose `parentId` chain (transitively) leads back to `rootId`,
+ * used so dragging a node carries its whole subtree along with it instead
+ * of leaving children stranded on the pre-drag branch. */
+function descendantIds(agents: SubAgent[], rootId: string): Set<string> {
+  const childrenOf = new Map<string, string[]>();
+  for (const a of agents) {
+    if (!a.parentId) continue;
+    if (!childrenOf.has(a.parentId)) childrenOf.set(a.parentId, []);
+    childrenOf.get(a.parentId)!.push(a.id);
+  }
+  const result = new Set<string>();
+  const stack = [rootId];
+  while (stack.length) {
+    const id = stack.pop()!;
+    for (const kid of childrenOf.get(id) ?? []) {
+      if (!result.has(kid)) {
+        result.add(kid);
+        stack.push(kid);
+      }
+    }
+  }
+  return result;
+}
+
 /** Two control points offset perpendicular to the straight parent->child
  * line, wandering slowly over time — this is what makes a beam read as an
  * organic neural tendril instead of a ruler-straight wire. Amplitude and
@@ -299,7 +327,7 @@ function organicControls(x0: number, y0: number, x1: number, y1: number, seed: n
 }
 
 export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent) => void }) {
-  const { activeProject } = useAppState();
+  const { activeProject, setAgentPosition, resetAgentLayout } = useAppState();
   const stageRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
@@ -308,7 +336,16 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
   viewRef.current = view;
   const hasCenteredRef = useRef(false);
   const dragRef = useRef<{ startX: number; startY: number; startViewX: number; startViewY: number } | null>(null);
-  const dragMovedRef = useRef(false);
+
+  // Live node-drag state: rendered as an offset applied to the affected
+  // node + its whole subtree (see `descendantIds`) while the gesture is in
+  // flight, then committed to AppState (persisted `manualX`/`manualY`) once
+  // on release — not on every pointermove, so dragging doesn't hammer the
+  // persisted-projects effect/localStorage write on every frame.
+  const [dragState, setDragState] = useState<{ id: string; dx: number; dy: number; ids: Set<string> } | null>(null);
+  const nodeDragRef = useRef<{ id: string; startClientX: number; startClientY: number; ids: Set<string>; moved: boolean } | null>(
+    null,
+  );
 
   useEffect(() => {
     const el = stageRef.current;
@@ -341,7 +378,23 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
   // this ring at all, they branch off their own parent's position instead.
   const radius = Math.min(MAX_RADIUS, Math.max(BASE_RADIUS, (rootCount * MIN_ARC_SPACING) / (2 * Math.PI)));
 
-  const { positions, activePins } = layoutAgentTree(agents, cx, cy, radius);
+  const { positions: basePositions, activePins } = layoutAgentTree(agents, cx, cy, radius);
+  const positions = dragState
+    ? basePositions.map((p) => {
+        if (!dragState.ids.has(p.agent.id)) return p;
+        // Only the dragged node's own parent edge stays anchored to its
+        // fixed parent; every true descendant's parent already moved with
+        // it, so that edge shifts too, keeping the whole subtree rigid.
+        const parentAlsoShifted = p.agent.id !== dragState.id;
+        return {
+          ...p,
+          x: p.x + dragState.dx,
+          y: p.y + dragState.dy,
+          parentX: parentAlsoShifted ? p.parentX + dragState.dx : p.parentX,
+          parentY: parentAlsoShifted ? p.parentY + dragState.dy : p.parentY,
+        };
+      })
+    : basePositions;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -470,7 +523,6 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
 
   function handlePointerDown(e: React.PointerEvent) {
     (e.target as Element).setPointerCapture(e.pointerId);
-    dragMovedRef.current = false;
     dragRef.current = { startX: e.clientX, startY: e.clientY, startViewX: view.x, startViewY: view.y };
   }
 
@@ -479,7 +531,6 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
     if (!d) return;
     const dx = e.clientX - d.startX;
     const dy = e.clientY - d.startY;
-    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) dragMovedRef.current = true;
     setView((v) => ({ ...v, x: d.startViewX + dx, y: d.startViewY + dy }));
   }
 
@@ -500,6 +551,36 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
 
   function recenter() {
     setView({ x: size.w / 2 - WORLD_CENTER, y: size.h / 2 - WORLD_CENTER, scale: 1 });
+  }
+
+  function handleNodePointerDown(e: React.PointerEvent, pos: NodePos) {
+    e.stopPropagation(); // don't also start a stage pan
+    (e.currentTarget as Element).setPointerCapture(e.pointerId);
+    const ids = descendantIds(agents, pos.agent.id);
+    ids.add(pos.agent.id);
+    nodeDragRef.current = { id: pos.agent.id, startClientX: e.clientX, startClientY: e.clientY, ids, moved: false };
+  }
+
+  function handleNodePointerMove(e: React.PointerEvent) {
+    const d = nodeDragRef.current;
+    if (!d) return;
+    const dx = (e.clientX - d.startClientX) / view.scale;
+    const dy = (e.clientY - d.startClientY) / view.scale;
+    if (Math.abs(dx) > 2 || Math.abs(dy) > 2) d.moved = true;
+    if (d.moved) setDragState({ id: d.id, dx, dy, ids: d.ids });
+  }
+
+  function handleNodePointerUp(pos: NodePos) {
+    const d = nodeDragRef.current;
+    nodeDragRef.current = null;
+    if (!d) return;
+    if (d.moved) {
+      const finalPos = positions.find((p) => p.agent.id === d.id);
+      if (finalPos && activeProject) setAgentPosition(activeProject.id, d.id, finalPos.x, finalPos.y);
+      setDragState(null);
+    } else {
+      onSelectAgent(pos.agent);
+    }
   }
 
   return (
@@ -556,13 +637,9 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
               ["--role-color" as string]: ROLE_COLOR[pos.agent.role],
               ["--status-color" as string]: STATUS_COLOR[pos.agent.status],
             }}
-            onClick={() => {
-              if (dragMovedRef.current) {
-                dragMovedRef.current = false;
-                return;
-              }
-              onSelectAgent(pos.agent);
-            }}
+            onPointerDown={(e) => handleNodePointerDown(e, pos)}
+            onPointerMove={handleNodePointerMove}
+            onPointerUp={() => handleNodePointerUp(pos)}
           >
             <span className="jarvis-agent-shape" data-shape={pos.shape}>
               <span className="jarvis-agent-shape-inner" />
@@ -595,6 +672,14 @@ export function JarvisCore({ onSelectAgent }: { onSelectAgent: (agent: SubAgent)
           </button>
           <button type="button" onClick={recenter} title="Centra la vista" aria-label="Centra la vista">
             ⟲
+          </button>
+          <button
+            type="button"
+            onClick={() => resetAgentLayout(activeProject.id)}
+            title="Rimuove ogni posizione spostata a mano, tornando al layout automatico"
+            aria-label="Resetta il layout"
+          >
+            ⤾
           </button>
         </div>
       )}

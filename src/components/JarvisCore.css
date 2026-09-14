@@ -218,10 +218,15 @@
   width: 92px;
   background: none;
   border: none;
-  cursor: pointer;
+  cursor: grab;
   padding: 4px;
   border-radius: 8px;
   color: var(--text-muted);
+  touch-action: none;
+}
+
+.jarvis-agent-node:active {
+  cursor: grabbing;
 }
 
 .jarvis-agent-node:focus-visible {

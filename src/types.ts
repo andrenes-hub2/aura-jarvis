@@ -18,6 +18,9 @@ export interface SubAgent {
   load: number; // 0-1, drives the node's activity ring
   /** Id of the agent that spawned this one; absent means it's a direct child of AURA core. */
   parentId?: string;
+  /** User-dragged override for this node's world position; absent means use the automatic layout. */
+  manualX?: number;
+  manualY?: number;
 }
 
 export interface Project {

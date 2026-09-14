@@ -58,6 +58,8 @@ interface AppStateShape {
   createProject: () => Promise<void>;
   toggleRuflo: (projectId: string) => void;
   toggleFullAuto: (projectId: string) => void;
+  setAgentPosition: (projectId: string, agentId: string, x: number, y: number) => void;
+  resetAgentLayout: (projectId: string) => void;
   setCoreModel: (projectId: string, model: string) => void;
   sendPrompt: (text: string, attachmentPaths?: string[]) => Promise<void>;
 }
@@ -186,6 +188,30 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, fullAuto: !p.fullAuto } : p)));
   }
 
+  // Committed once on drag release (not live on every pointermove) so
+  // dragging a node doesn't hammer the persisted-projects effect/localStorage
+  // write on every frame — the live drag position during the gesture is
+  // JarvisCore's own local state.
+  function setAgentPosition(projectId: string, agentId: string, x: number, y: number) {
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? { ...p, agents: p.agents.map((a) => (a.id === agentId ? { ...a, manualX: x, manualY: y } : a)) }
+          : p,
+      ),
+    );
+  }
+
+  function resetAgentLayout(projectId: string) {
+    setProjects((prev) =>
+      prev.map((p) =>
+        p.id === projectId
+          ? { ...p, agents: p.agents.map((a) => ({ ...a, manualX: undefined, manualY: undefined })) }
+          : p,
+      ),
+    );
+  }
+
   function setCoreModel(projectId: string, model: string) {
     setProjects((prev) => prev.map((p) => (p.id === projectId ? { ...p, coreModel: model } : p)));
   }
@@ -255,6 +281,8 @@ export function AppStateProvider({ children }: { children: ReactNode }) {
     createProject,
     toggleRuflo,
     toggleFullAuto,
+    setAgentPosition,
+    resetAgentLayout,
     setCoreModel,
     sendPrompt,
   };
