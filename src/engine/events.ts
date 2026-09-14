@@ -153,22 +153,36 @@ export function applyAgentEvent(state: EngineState, event: any): EngineState {
             // is the *calling* agent's id (null if the top-level session
             // itself made the call) — exactly the hierarchy edge needed to
             // draw this node under its real parent instead of the core.
+            //
+            // The node's name prefers the caller's own `description` (the
+            // short label an orchestrating agent writes for *this specific*
+            // sub-agent, e.g. "Persuasione") over `subagent_type` (a coarse
+            // category like "general-purpose" shared by every sub-agent
+            // that didn't get a more specific type) — otherwise every
+            // same-typed agent in a batch renders under the same generic
+            // label, which is indistinguishable from the fallback below.
             const subagentType: string | undefined = block.input?.subagent_type;
-            const description: string = block.input?.description ?? block.input?.prompt ?? "Nuovo task";
+            const rawDescription: string | undefined = block.input?.description;
+            const taskText: string = rawDescription ?? block.input?.prompt ?? "Nuovo task";
+            const displayName = rawDescription
+              ? truncate(rawDescription, 24)
+              : subagentType
+                ? subagentType.replace(/[-_]/g, " ")
+                : `agente-${block.id.slice(0, 6)}`;
             upsertAgent(
               block.id,
-              { status: "active", task: truncate(description), load: 0.6 },
+              { status: "active", task: truncate(taskText), load: 0.6 },
               {
-                name: subagentType ? subagentType.replace(/[-_]/g, " ") : `agente-${block.id.slice(0, 6)}`,
+                name: displayName,
                 role: guessRole(subagentType),
                 status: "active",
-                task: truncate(description),
+                task: truncate(taskText),
                 load: 0.6,
                 parentId: parentId ?? undefined,
               },
             );
             logs.push(
-              makeLog("Aura", `Avvia sub-agente: ${subagentType ?? block.id.slice(0, 8)} — ${truncate(description, 100)}`),
+              makeLog("Aura", `Avvia sub-agente: ${displayName} — ${truncate(taskText, 100)}`),
             );
           } else if (bare === "agent_spawn") {
             // ruflo registers a tracked agent. Its real agentId is only known
