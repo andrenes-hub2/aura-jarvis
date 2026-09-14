@@ -17,9 +17,17 @@ function loadPersisted(): Project[] {
     // vanishing), but any "active" status is stale by definition — the
     // Claude Code process that was driving it is long gone once the app
     // restarts — so it's demoted to idle rather than shown as still working.
+    //
+    // Older builds keyed a node's name off the raw tool_use id before the
+    // native sub-agent tool was recognized by its real name (see events.ts
+    // history) — every one of those ids shares Anthropic's fixed
+    // "toolu_..." prefix, so every such leftover node renders with the same
+    // meaningless label. Drop them here so a restart clears them for good.
     return parsed.map((p) => ({
       ...p,
-      agents: (p.agents ?? []).map((a) => (a.status === "active" ? { ...a, status: "idle", load: 0 } : a)),
+      agents: (p.agents ?? [])
+        .filter((a) => !/^toolu[_-]/i.test(a.name))
+        .map((a) => (a.status === "active" ? { ...a, status: "idle", load: 0 } : a)),
       logs: p.logs ?? [],
       messages: p.messages ?? [],
       running: false,
